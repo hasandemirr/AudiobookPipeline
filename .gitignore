@@ -1,0 +1,7 @@
+﻿workspace/
+output/
+logs/
+assets/reference_voices/
+__pycache__/
+*.pyc
+.env

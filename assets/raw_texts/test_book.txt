@@ -1,0 +1,1 @@
+Yapay zeka, insan zekasını taklit eden sistemler bütünüdür. Bu sistemler öğrenme, problem çözme ve karar verme gibi yeteneklere sahiptir. Makine öğrenmesi, yapay zekanın en önemli alt dallarından biridir. Derin öğrenme ise çok katmanlı sinir ağları kullanır. Bu teknolojiler günümüzde tıptan finansa kadar her alanda kullanılmaktadır.
