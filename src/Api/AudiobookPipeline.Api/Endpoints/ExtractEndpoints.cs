@@ -17,7 +17,8 @@ public static class ExtractEndpoints
         HttpRequest request,
         PathService paths,
         ManifestService svc,
-        IHubContext<ProgressHub> hub)
+        IHubContext<ProgressHub> hub,
+        IConfiguration config)
     {
         if (!request.HasFormContentType)
             return Results.BadRequest(
@@ -62,7 +63,7 @@ public static class ExtractEndpoints
 
         // Run extract in background
         _ = Task.Run(() => RunExtract(
-            slug, pdfPath, paths, svc, hub));
+            slug, pdfPath, paths, svc, hub, config));
 
         return Results.Accepted(null, new
         {
@@ -76,7 +77,8 @@ public static class ExtractEndpoints
         string pdfPath,
         PathService paths,
         ManifestService svc,
-        IHubContext<ProgressHub> hub)
+        IHubContext<ProgressHub> hub,
+        IConfiguration config)
     {
         var manifestPath = paths.ManifestPath(slug);
 
@@ -95,8 +97,12 @@ public static class ExtractEndpoints
 
             var tocParser = new TocParserService();
             var extractor = new PdfExtractService();
+            
+            var minRepeat = config.GetValue<int>("Extract:HeaderFooterMinRepeatCount", 3);
+            var scanLines = config.GetValue<int>("Extract:HeaderFooterScanLines", 3);
             var detector  = new HeaderFooterDetector(
-                minRepeatCount: 3);
+                minRepeatCount: minRepeat,
+                scanLines: scanLines);
             var ocrFix    = new OcrFixService(paths.OcrRulesPath);
 
             await Notify("Reading TOC...", 5);
@@ -117,12 +123,30 @@ public static class ExtractEndpoints
 
             var allPages  = extractor.ExtractPages(pdfPath);
             var allTexts  = allPages.Select(p => p.Text).ToList();
-            var repeated  = detector.DetectRepeatedLines(allTexts);
+            
+            var detectedPatterns = detector.DetectPatterns(allTexts);
 
             var manifest  = svc.Load(manifestPath);
             manifest.Book = slug;
             manifest.Toc  = toc;
             manifest.Sections = new List<Section>();
+
+            manifest.RepeatedLines = detectedPatterns
+                .Select(p => p.Text)
+                .ToList();
+
+            manifest.DetectedPatterns = detectedPatterns
+                .Select(p => new DetectedPattern
+                {
+                    Text               = p.Text,
+                    Position           = p.Position,
+                    PageCount          = p.PageCount,
+                    TotalPages         = p.TotalPages,
+                    Confidence         = p.Confidence,
+                    IsPageNumber       = p.IsPageNumber,
+                    IsCheckedByDefault = p.IsCheckedByDefault,
+                })
+                .ToList();
 
             for (int i = 0; i < toc.Count; i++)
             {
@@ -137,9 +161,7 @@ public static class ExtractEndpoints
                                  && p.PageNumber <= entry.PageEnd)
                         .Select(p =>
                         {
-                            var t = extractor.RemovePageNumbers(p.Text);
-                            t = detector.RemoveRepeatedLines(t, repeated);
-                            t = extractor.JoinBrokenLines(t);
+                            var t = extractor.JoinBrokenLines(p.Text);
                             return extractor.FormatPageWithMarker(
                                 p.PageNumber, t);
                         }));

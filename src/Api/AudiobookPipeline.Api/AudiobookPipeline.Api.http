@@ -1,6 +1,21 @@
-@AudiobookPipeline.Api_HostAddress = http://localhost:5173
+@host = http://localhost:5000
 
-GET {{AudiobookPipeline.Api_HostAddress}}/weatherforecast/
+GET {{host}}/api/health
+Accept: application/json
+
+###
+
+GET {{host}}/api/books
+Accept: application/json
+
+###
+
+GET {{host}}/api/books/test_kitap/status
+Accept: application/json
+
+###
+
+GET {{host}}/api/books/test_kitap/export/status
 Accept: application/json
 
 ###

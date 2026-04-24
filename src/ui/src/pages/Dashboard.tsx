@@ -9,21 +9,16 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
 import { Separator } from '@/components/ui/separator'
-import * as signalR from '@microsoft/signalr'
-import { BookOpen, Upload, CheckCircle, Clock } from 'lucide-react'
-
-interface ExtractProgress {
-  slug: string
-  message: string
-  percent: number
-  done?: boolean
-  error?: boolean
-}
+import { BookOpen, Upload, CheckCircle, Clock, Trash2, FileX } from 'lucide-react'
+import { useDeleteBook } from '../hooks/useDeleteBook'
+import { ConfirmDialog } from '../components/ConfirmDialog'
+import { useExtractProgress, type ExtractProgress } from '../hooks/useExtractProgress'
 
 export default function Dashboard() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const fileRef = useRef<HTMLInputElement>(null)
+  const { deleteBook, deleteOutput } = useDeleteBook()
 
   const [slug, setSlug] = useState('')
   const [extracting, setExtracting] = useState(false)
@@ -36,36 +31,42 @@ export default function Dashboard() {
     refetchInterval: extracting ? 2000 : false,
   })
 
+  const { connect, disconnect } = useExtractProgress({
+    onProgress: (data) => {
+      setProgress(data)
+    },
+    onDone: () => {
+      setExtracting(false)
+      queryClient.invalidateQueries({ queryKey: ['books'] })
+    },
+    onError: () => {
+      setExtracting(false)
+      setProgress(null)
+    },
+  })
+
   const startExtract = async (file: File) => {
     if (!slug.trim()) {
       toast.error('Please enter a book slug first.')
       return
     }
 
-    // SignalR bağlan
-    const connection = new signalR.HubConnectionBuilder()
-      .withUrl('/hubs/progress')
-      .withAutomaticReconnect()
-      .build()
-
-    connection.on('ExtractProgress', (data: ExtractProgress) => {
-      setProgress(data)
-      if (data.done) {
-        connection.stop()
-        setExtracting(false)
-        queryClient.invalidateQueries({ queryKey: ['books'] })
-      }
-    })
-
-    await connection.start()
+    await connect()
     setExtracting(true)
-    setProgress({ slug, message: 'Başlatılıyor...', percent: 0 })
+    setProgress({ 
+      slug, 
+      message: 'Starting...', 
+      percent: 0 
+    })
 
     try {
       await api.extractPdf(slug, file)
-    } catch {
+    } catch (err: any) {
+      await disconnect()
       setExtracting(false)
       setProgress(null)
+      const message = err?.message || 'Failed to start extract.'
+      toast.error(message)
     }
   }
 
@@ -170,47 +171,104 @@ export default function Dashboard() {
           {books.map((book: BookSummary) => (
             <Card
               key={book.slug}
-              className="cursor-pointer hover:bg-muted/50 transition-colors"
-              onClick={() => navigate(`/review/${book.slug}`)}
+              className="transition-colors hover:bg-muted/20"
             >
-              <CardContent className="flex items-center 
+              <CardContent className="flex items-center
                                       justify-between py-4">
-                <div className="flex items-center gap-3">
-                  <BookOpen size={20} 
+                {/* Mevcut sol kısım — değişmez */}
+                <div
+                  className="flex items-center gap-3 flex-1 cursor-pointer"
+                  onClick={() => navigate(`/review/${book.slug}`)}
+                >
+                  <BookOpen size={20}
                     className="text-muted-foreground" />
                   <div>
                     <p className="font-medium">{book.title}</p>
                     <p className="text-sm text-muted-foreground">
-                      {book.section_count} bölüm
+                      {book.section_count} sections
                     </p>
                   </div>
                 </div>
-                <div className="flex items-center gap-4">
+
+                {/* Sağ kısım — status + silme butonları */}
+                <div className="flex items-center gap-3">
                   <div className="text-sm text-right">
-                    <div className="flex items-center gap-1 
+                    <div className="flex items-center gap-1
                                     text-muted-foreground">
                       <CheckCircle size={14} />
                       <span>
-                        {book.approved_count}/{book.section_count} onaylı
+                        {book.approved_count}/{book.section_count} approved
                       </span>
                     </div>
                     {book.chunk_count > 0 && (
-                      <div className="flex items-center gap-1 
+                      <div className="flex items-center gap-1
                                       text-muted-foreground">
                         <Clock size={14} />
-                        <span>{book.chunk_count} chunk</span>
+                        <span>{book.chunk_count} chunks</span>
                       </div>
                     )}
                   </div>
+
                   <Badge variant={
-                    book.approved_count === book.section_count 
+                    book.approved_count === book.section_count
                       && book.section_count > 0
                         ? 'default' : 'outline'
                   }>
-                    {book.approved_count === book.section_count 
+                    {book.approved_count === book.section_count
                      && book.section_count > 0
-                      ? 'Hazır' : 'Devam ediyor'}
+                      ? 'Ready' : 'In progress'}
                   </Badge>
+
+                  {/* Output sil */}
+                  <ConfirmDialog
+                    title="Delete output files?"
+                    description={
+                      `This will delete the exported files for "${book.slug}".` +
+                      ' Workspace data will be kept.'
+                    }
+                    confirmLabel="Delete output"
+                    onConfirm={() =>
+                      deleteOutput.mutate(book.slug)}
+                  >
+                    {open => (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={e => { e.stopPropagation(); open() }}
+                        title="Delete output files"
+                        className="text-muted-foreground
+                                   hover:text-foreground shrink-0"
+                      >
+                        <FileX size={15} />
+                      </Button>
+                    )}
+                  </ConfirmDialog>
+
+                  {/* Kitabı sil */}
+                  <ConfirmDialog
+                    title={`Delete "${book.slug}"?`}
+                    description={
+                      'This will permanently delete the workspace, ' +
+                      'all sections, and audio files. ' +
+                      'This cannot be undone.'
+                    }
+                    confirmLabel="Delete permanently"
+                    onConfirm={() =>
+                      deleteBook.mutate(book.slug)}
+                  >
+                    {open => (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={e => { e.stopPropagation(); open() }}
+                        title="Delete book"
+                        className="text-muted-foreground
+                                   hover:text-destructive shrink-0"
+                      >
+                        <Trash2 size={15} />
+                      </Button>
+                    )}
+                  </ConfirmDialog>
                 </div>
               </CardContent>
             </Card>

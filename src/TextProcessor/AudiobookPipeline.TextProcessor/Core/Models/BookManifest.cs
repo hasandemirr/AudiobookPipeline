@@ -11,4 +11,7 @@ public class BookManifest
     public List<TocEntry> Toc { get; set; } = new();
     public List<Section> Sections { get; set; } = new();
     public List<ChunkEntry> Chunks { get; set; } = new();
+    public List<string> RepeatedLines { get; set; } = new();
+    public List<string> RepeatedTokens { get; set; } = new();
+    public List<DetectedPattern> DetectedPatterns { get; set; } = new();
 }

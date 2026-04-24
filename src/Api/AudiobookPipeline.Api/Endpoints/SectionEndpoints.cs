@@ -50,6 +50,8 @@ public static class SectionEndpoints
             pageEnd = section.PageEnd,
             content,
             pages,
+            repeatedLines     = manifest.RepeatedLines,
+            detectedPatterns  = manifest.DetectedPatterns,
             isReviewed = !string.IsNullOrEmpty(section.ReviewedPath)
         });
     }

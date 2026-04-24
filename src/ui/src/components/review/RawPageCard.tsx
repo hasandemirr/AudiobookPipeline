@@ -1,26 +1,30 @@
 import type { PageBlock } from '../../lib/pageUtils'
 
-interface Props {
+interface RawPageProps {
   page: PageBlock
+  isActive: boolean
 }
 
-export function RawPageCard({ page }: Props) {
+export function RawPage({ page, isActive }: RawPageProps) {
   return (
-    <div className="flex-1 border rounded-lg overflow-hidden bg-muted/20">
+    <div
+      data-page={page.pageNumber}
+      className={`border rounded-lg overflow-hidden
+        transition-colors
+        ${isActive ? 'border-primary/40' : ''}`}
+    >
       <div className="px-3 py-1.5 bg-muted/60 text-xs
                       font-mono text-muted-foreground border-b">
         Page {page.pageNumber}
       </div>
-      <div className="p-2 space-y-0.5">
-        {page.lines.map((line, i) => (
-          <div
-            key={i}
-            className="px-2 py-0.5 text-xs font-mono leading-relaxed break-all"
-            title={line.text}
-          >
-            {line.text || '\u00A0'}
-          </div>
-        ))}
+      <div className="p-3 font-mono text-xs
+                      leading-relaxed whitespace-pre-wrap
+                      min-h-[60px]">
+        {page.text || (
+          <span className="text-muted-foreground italic">
+            (empty page)
+          </span>
+        )}
       </div>
     </div>
   )
