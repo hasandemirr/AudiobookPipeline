@@ -1,0 +1,10 @@
+{
+  "version": 2,
+  "dgSpecHash": "qYdzV3JHgRQ=",
+  "success": true,
+  "projectFilePath": "C:\\Users\\USER\\source\\repos\\AudiobookPipeline\\src\\TextProcessor\\AudiobookPipeline.TextProcessor\\AudiobookPipeline.TextProcessor.csproj",
+  "expectedPackageFiles": [
+    "C:\\Users\\USER\\.nuget\\packages\\pdfpig\\0.1.14\\pdfpig.0.1.14.nupkg.sha512"
+  ],
+  "logs": []
+}

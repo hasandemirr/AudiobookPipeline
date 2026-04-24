@@ -1,0 +1,22 @@
+{
+  "rules": [
+    {
+      "type": "word_replace",
+      "from": "yambaşmda",
+      "to": "yanı başında",
+      "notes": "m=nı pattern örneği"
+    },
+    {
+      "type": "char_replace",
+      "from": "iı",
+      "to": "n",
+      "notes": "n harfi iki çizgi okunmuş"
+    },
+    {
+      "type": "char_replace",
+      "from": "ıi",
+      "to": "n",
+      "notes": "n harfi iki çizgi okunmuş ters sıra"
+    }
+  ]
+}

@@ -1,7 +1,31 @@
 import sys, torch, torchaudio as ta
 from pathlib import Path
 
-sys.path.insert(0, r"C:\AI\chatterbox\src")
+import os
+from pathlib import Path
+
+def find_repo_root() -> Path:
+    p = Path(__file__).resolve()
+    while p != p.parent:
+        if (p / ".gitignore").exists():
+            return p
+        p = p.parent
+    raise RuntimeError("Repo kökü bulunamadı.")
+
+repo_root = find_repo_root()
+
+# .env dosyası varsa yükle
+env_path = repo_root / ".env"
+if env_path.exists():
+    for line in env_path.read_text().splitlines():
+        if "=" in line and not line.startswith("#"):
+            k, v = line.split("=", 1)
+            os.environ.setdefault(k.strip(), v.strip())
+
+chatterbox_src = os.environ.get(
+    "CHATTERBOX_SRC", r"C:\AI\chatterbox\src")
+sys.path.insert(0, chatterbox_src)
+
 from chatterbox.mtl_tts import ChatterboxMultilingualTTS
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"

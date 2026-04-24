@@ -1,0 +1,6 @@
+@AudiobookPipeline.Api_HostAddress = http://localhost:5173
+
+GET {{AudiobookPipeline.Api_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

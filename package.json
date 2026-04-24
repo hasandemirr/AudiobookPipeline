@@ -1,0 +1,13 @@
+{
+  "name": "audiobookpipeline",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently \"npm run api\" \"npm run ui\"",
+    "ui": "cd src/ui && npm run dev",
+    "api": "dotnet run --project src/Api/AudiobookPipeline.Api/AudiobookPipeline.Api.csproj"
+  },
+  "devDependencies": {
+    "concurrently": "^9.0.0"
+  }
+}
