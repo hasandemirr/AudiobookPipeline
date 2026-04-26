@@ -23,9 +23,3 @@ repomix-output*.txt
 
 # Vite build output
 src/ui/dist/
-
-# Test artifacts
-src/ui/src/assets/hero.png
-src/ui/src/assets/typescript.svg
-src/ui/src/assets/vite.svg
-src/ui/public/icons.svg

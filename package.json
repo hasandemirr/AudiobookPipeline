@@ -4,8 +4,9 @@
   "private": true,
   "scripts": {
     "dev": "concurrently \"npm run api\" \"npm run ui\"",
+    "api": "dotnet run --project src/Api/AudiobookPipeline.Api/AudiobookPipeline.Api.csproj",
     "ui": "cd src/ui && npm run dev",
-    "api": "dotnet run --project src/Api/AudiobookPipeline.Api/AudiobookPipeline.Api.csproj"
+    "kill-api": "for /f \"tokens=5\" %a in ('netstat -ano ^| findstr :5000') do taskkill /PID %a /F"
   },
   "devDependencies": {
     "concurrently": "^9.0.0"

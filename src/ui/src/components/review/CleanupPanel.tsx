@@ -30,7 +30,7 @@ interface CleanupPanelProps {
   appliedCount: number
 }
 
-function confidenceBadge(conf: string) {
+function ConfidenceBadge({ conf }: { conf: string }) {
   if (conf === 'high')
     return (
       <Badge variant="default" className="text-xs h-4 px-1">
@@ -66,7 +66,6 @@ export function CleanupPanel({
   )
 
   const [customPatterns, setCustomPatterns] = useState<CustomPattern[]>([])
-
   const [customInput, setCustomInput] = useState('')
   const [customMatchType, setCustomMatchType] =
     useState<CustomPattern['matchType']>('exact')
@@ -80,8 +79,10 @@ export function CleanupPanel({
 
   const allChecked = useMemo(
     () =>
+      selections.length > 0 &&
       selections.every(s => s.checked) &&
-      customPatterns.every(c => c.checked),
+      (customPatterns.length === 0 ||
+        customPatterns.every(c => c.checked)),
     [selections, customPatterns]
   )
 
@@ -95,21 +96,19 @@ export function CleanupPanel({
     )
   }
 
-  const togglePattern = (index: number) => {
+  const togglePattern = (index: number) =>
     setSelections(prev =>
       prev.map((s, i) =>
         i === index ? { ...s, checked: !s.checked } : s
       )
     )
-  }
 
-  const toggleCustom = (id: string) => {
+  const toggleCustom = (id: string) =>
     setCustomPatterns(prev =>
       prev.map(c =>
         c.id === id ? { ...c, checked: !c.checked } : c
       )
     )
-  }
 
   const addCustomPattern = () => {
     const text = customInput.trim()
@@ -126,33 +125,50 @@ export function CleanupPanel({
     setCustomInput('')
   }
 
-  const removeCustomPattern = (id: string) => {
+  const removeCustom = (id: string) =>
     setCustomPatterns(prev =>
       prev.filter(c => c.id !== id)
     )
-  }
 
   const handleApply = () => {
     const selected = selections
       .filter(s => s.checked)
       .map(s => s.pattern)
-    onApply(selected, customPatterns.filter(c => c.checked))
+    onApply(
+      selected,
+      customPatterns.filter(c => c.checked)
+    )
   }
 
-  const highPatterns   = selections.filter(
-    s => s.pattern.confidence === 'high')
-  const mediumPatterns = selections.filter(
-    s => s.pattern.confidence === 'medium')
-  const lowPatterns    = selections.filter(
-    s => s.pattern.confidence === 'low')
+  const groups = [
+    {
+      label: 'High confidence',
+      items: selections.filter(
+        s => s.pattern.confidence === 'high'),
+    },
+    {
+      label: 'Medium confidence',
+      items: selections.filter(
+        s => s.pattern.confidence === 'medium'),
+    },
+    {
+      label: 'Low confidence',
+      items: selections.filter(
+        s => s.pattern.confidence === 'low'),
+    },
+  ]
 
   return (
-    <div className="border-b bg-muted/10 shrink-0">
-      {/* Header */}
+    <div className="border-b bg-muted/10 shrink-0
+                    flex flex-col"
+         style={{ maxHeight: isOpen ? '280px' : 'auto' }}>
+
+      {/* ── Panel header — always visible ── */}
       <div
         className="px-4 py-2 flex items-center
                    justify-between cursor-pointer
-                   hover:bg-muted/20 transition-colors"
+                   hover:bg-muted/20 transition-colors
+                   shrink-0 border-b"
         onClick={() => setIsOpen(v => !v)}
       >
         <div className="flex items-center gap-2">
@@ -172,7 +188,7 @@ export function CleanupPanel({
             </Badge>
           )}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
           {appliedCount > 0 && (
             <button
               onClick={e => {
@@ -198,11 +214,12 @@ export function CleanupPanel({
       </div>
 
       {isOpen && (
-        <div className="px-4 pb-3 space-y-3">
+        <>
+          {/* ── Scrollable pattern list ── */}
+          <div className="overflow-y-auto flex-1 px-4 py-2
+                          space-y-3 min-h-0">
 
-          {/* Select all */}
-          <div className="flex items-center
-                          justify-between">
+            {/* Select all */}
             <label className="flex items-center
                                gap-2 cursor-pointer">
               <input
@@ -211,138 +228,118 @@ export function CleanupPanel({
                 onChange={toggleAll}
                 className="rounded"
               />
-              <span className="text-xs
-                               text-muted-foreground">
-                Select all
+              <span className="text-xs text-muted-foreground">
+                Select all ({patterns.length} patterns)
               </span>
             </label>
-          </div>
 
-          <Separator />
+            <Separator />
 
-          {/* Pattern groups */}
-          {[
-            { label: 'High confidence',
-              items: highPatterns },
-            { label: 'Medium confidence',
-              items: mediumPatterns },
-            { label: 'Low confidence',
-              items: lowPatterns },
-          ].map(group =>
-            group.items.length === 0 ? null : (
-              <div key={group.label}
-                className="space-y-1">
-                <p className="text-xs
-                               text-muted-foreground/60
-                               font-medium uppercase
-                               tracking-wide">
-                  {group.label}
-                </p>
-                {group.items.map((s, groupIdx) => {
-                  const globalIdx =
-                    selections.indexOf(s)
-                  return (
-                    <label
-                      key={s.pattern.text + s.pattern.position}
-                      className="flex items-start
-                                 gap-2 cursor-pointer
-                                 group"
-                    >
+            {/* Pattern groups */}
+            {groups.map(group =>
+              group.items.length === 0 ? null : (
+                <div key={group.label} className="space-y-1">
+                  <p className="text-xs text-muted-foreground/60
+                                font-medium uppercase
+                                tracking-wide">
+                    {group.label}
+                  </p>
+                  {group.items.map(s => {
+                    const idx = selections.indexOf(s)
+                    return (
+                      <label
+                        key={s.pattern.text +
+                             s.pattern.position}
+                        className="flex items-start gap-2
+                                   cursor-pointer"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={s.checked}
+                          onChange={() => togglePattern(idx)}
+                          className="rounded mt-0.5 shrink-0"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center
+                                          gap-1.5 flex-wrap">
+                            <span className="text-xs
+                                             font-mono">
+                              {s.pattern.text}
+                            </span>
+                            <ConfidenceBadge
+                              conf={s.pattern.confidence} />
+                            {s.pattern.is_page_number && (
+                              <Badge variant="outline"
+                                className="text-xs h-4 px-1
+                                           text-blue-600
+                                           dark:text-blue-400">
+                                page no
+                              </Badge>
+                            )}
+                          </div>
+                          <p className="text-xs
+                                        text-muted-foreground/60">
+                            {s.pattern.position} line
+                            · {s.pattern.page_count} pages
+                          </p>
+                        </div>
+                      </label>
+                    )
+                  })}
+                </div>
+              )
+            )}
+
+            {/* Custom patterns */}
+            {customPatterns.length > 0 && (
+              <>
+                <Separator />
+                <div className="space-y-1">
+                  <p className="text-xs
+                                text-muted-foreground/60
+                                font-medium uppercase
+                                tracking-wide">
+                    Custom
+                  </p>
+                  {customPatterns.map(c => (
+                    <label key={c.id}
+                      className="flex items-center
+                                 gap-2 cursor-pointer">
                       <input
                         type="checkbox"
-                        checked={s.checked}
-                        onChange={() =>
-                          togglePattern(globalIdx)}
-                        className="rounded mt-0.5
-                                   shrink-0"
+                        checked={c.checked}
+                        onChange={() => toggleCustom(c.id)}
+                        className="rounded shrink-0"
                       />
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center
-                                        gap-1.5 flex-wrap">
-                          <span className="text-xs
-                                           font-mono
-                                           truncate">
-                            {s.pattern.text}
-                          </span>
-                          {confidenceBadge(
-                            s.pattern.confidence)}
-                          {s.pattern.is_page_number && (
-                            <Badge variant="outline"
-                              className="text-xs h-4
-                                         px-1 text-blue-600
-                                         dark:text-blue-400">
-                              page no
-                            </Badge>
-                          )}
-                        </div>
-                        <p className="text-xs
-                                      text-muted-foreground/60">
-                          {s.pattern.position} line
-                          · {s.pattern.page_count} pages
-                        </p>
-                      </div>
+                      <span className="text-xs font-mono
+                                       flex-1 truncate">
+                        {c.text}
+                      </span>
+                      <span className="text-xs
+                                       text-muted-foreground/60
+                                       shrink-0">
+                        {c.matchType}
+                      </span>
+                      <button
+                        onClick={() => removeCustom(c.id)}
+                        className="text-muted-foreground
+                                   hover:text-destructive
+                                   shrink-0 transition-colors"
+                      >
+                        <Trash2 size={12} />
+                      </button>
                     </label>
-                  )
-                })}
-              </div>
-            )
-          )}
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
 
-          {/* Custom patterns */}
-          {customPatterns.length > 0 && (
-            <>
-              <Separator />
-              <div className="space-y-1">
-                <p className="text-xs
-                               text-muted-foreground/60
-                               font-medium uppercase
-                               tracking-wide">
-                  Custom
-                </p>
-                {customPatterns.map(c => (
-                  <label
-                    key={c.id}
-                    className="flex items-center
-                               gap-2 cursor-pointer"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={c.checked}
-                      onChange={() => toggleCustom(c.id)}
-                      className="rounded shrink-0"
-                    />
-                    <span className="text-xs font-mono
-                                     flex-1 truncate">
-                      {c.text}
-                    </span>
-                    <span className="text-xs
-                                     text-muted-foreground/60
-                                     shrink-0">
-                      {c.matchType}
-                    </span>
-                    <button
-                      onClick={() =>
-                        removeCustomPattern(c.id)}
-                      className="text-muted-foreground
-                                 hover:text-destructive
-                                 shrink-0 transition-colors"
-                    >
-                      <Trash2 size={12} />
-                    </button>
-                  </label>
-                ))}
-              </div>
-            </>
-          )}
+          {/* ── Fixed footer — always visible ── */}
+          <div className="px-4 py-2 border-t bg-muted/10
+                          shrink-0 space-y-2">
 
-          {/* Custom input */}
-          <Separator />
-          <div className="space-y-2">
-            <p className="text-xs text-muted-foreground/60
-                          font-medium uppercase
-                          tracking-wide">
-              Add pattern
-            </p>
+            {/* Custom input */}
             <div className="flex gap-2">
               <input
                 type="text"
@@ -353,7 +350,7 @@ export function CleanupPanel({
                   if (e.key === 'Enter')
                     addCustomPattern()
                 }}
-                placeholder="Text to remove..."
+                placeholder="Add custom pattern..."
                 className="flex-1 px-2 py-1 text-xs
                            border rounded bg-background
                            focus:outline-none
@@ -371,36 +368,34 @@ export function CleanupPanel({
                            focus:outline-none"
               >
                 <option value="exact">exact</option>
-                <option value="starts-with">
-                  starts with
-                </option>
-                <option value="ends-with">
-                  ends with
-                </option>
+                <option value="starts-with">starts</option>
+                <option value="ends-with">ends</option>
               </select>
               <Button
                 size="sm"
                 variant="outline"
                 onClick={addCustomPattern}
                 disabled={!customInput.trim()}
-                className="shrink-0"
+                className="shrink-0 px-2"
               >
                 <Plus size={12} />
               </Button>
             </div>
-          </div>
 
-          {/* Apply button */}
-          <Button
-            size="sm"
-            className="w-full"
-            onClick={handleApply}
-            disabled={selectedCount === 0}
-          >
-            <Trash2 size={13} className="mr-1.5" />
-            Apply to all pages ({selectedCount} patterns)
-          </Button>
-        </div>
+            {/* Apply button */}
+            <Button
+              size="sm"
+              className="w-full"
+              onClick={handleApply}
+              disabled={selectedCount === 0}
+            >
+              <Trash2 size={13} className="mr-1.5" />
+              Apply to all pages
+              {selectedCount > 0 &&
+                ` (${selectedCount})`}
+            </Button>
+          </div>
+        </>
       )}
     </div>
   )

@@ -88,7 +88,7 @@ export default function ReviewPage() {
 
             {/* Cleanup panel */}
             {selectedId && !sectionLoading &&
-              sectionData?.detected_patterns?.length > 0 && (
+              (sectionData?.detected_patterns?.length ?? 0) > 0 && (
               <CleanupPanel
                 patterns={sectionData.detected_patterns}
                 onApply={applyCleanup}
