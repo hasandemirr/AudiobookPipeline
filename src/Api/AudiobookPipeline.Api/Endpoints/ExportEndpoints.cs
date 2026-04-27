@@ -36,10 +36,10 @@ public static class ExportEndpoints
         var parts = approved
             .Select(s =>
             {
-                var txt = !string.IsNullOrEmpty(s.ReviewedPath)
-                    && File.Exists(s.ReviewedPath)
-                        ? s.ReviewedPath : s.TxtPath;
-                return File.Exists(txt)
+                var txt = paths.ResolveSectionPath(s);
+                var exists = File.Exists(txt);
+                Console.WriteLine($"[EXPORT] Section {s.Id}, Path: {txt}, Exists: {exists}");
+                return exists
                     ? File.ReadAllText(txt, 
                         System.Text.Encoding.UTF8).Trim()
                     : null;

@@ -78,6 +78,12 @@ export default function ReviewPage() {
               onSave={() => saveMutation.mutate()}
               onApprove={() => approveMutation.mutate()}
               onNarrate={() => narrateMutation.mutate()}
+              onExport={async () => {
+                if (isDirty) {
+                  await saveMutation.mutateAsync()
+                }
+                window.open(`/api/books/${slug}/export`, '_blank')
+              }}
               onPrev={() =>
                 currentIndex > 0 &&
                 goTo(sections[currentIndex - 1].id)}

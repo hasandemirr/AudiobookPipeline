@@ -7,6 +7,7 @@ export type PageBlock = {
 export interface LineItem {
   id: string
   text: string
+  originalText: string
   lineIndex: number
   deleted: boolean
   suspicious: boolean
@@ -95,6 +96,7 @@ export function parsePages(
       .map((text, i) => ({
         id: `1-${i}`,
         text,
+        originalText: text,
         lineIndex: i,
         deleted: false,
         suspicious: isSuspicious(text, repeatedLines),
@@ -116,6 +118,7 @@ export function parsePages(
         .map((text, i) => ({
           id: `${pageNumber}-${i}`,
           text,
+          originalText: text,
           lineIndex: i,
           deleted: false,
           suspicious: isSuspicious(text, repeatedLines),
@@ -188,10 +191,10 @@ export function mergeCrossPageHyphens(
     const currentPage = result[i]
     const nextPage = result[i + 1]
 
-    // Find last non-empty line of current page
+    // Find last visible non-empty line of current page
     const lastLineIndex = [...currentPage.lines]
       .reverse()
-      .findIndex(l => l.text.trim() !== '')
+      .findIndex(l => !l.deleted && l.text.trim() !== '')
     if (lastLineIndex === -1) continue
 
     const realLastIndex =
@@ -201,9 +204,9 @@ export function mergeCrossPageHyphens(
     // Check if it ends with hyphen
     if (!lastLine.text.trimEnd().endsWith('-')) continue
 
-    // Find first non-empty line of next page
+    // Find first visible non-empty line of next page
     const firstLineIndex = nextPage.lines.findIndex(
-      l => l.text.trim() !== ''
+      l => !l.deleted && l.text.trim() !== ''
     )
     if (firstLineIndex === -1) continue
 

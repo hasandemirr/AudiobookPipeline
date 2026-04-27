@@ -114,8 +114,8 @@ export function useReviewState(slug: string | undefined) {
   // Toggle single line
   const toggleLine = useCallback(
     (pageNumber: number, lineId: string) => {
-      setRightPages(prev =>
-        prev.map(p =>
+      setRightPages(prev => {
+        const updated = prev.map(p =>
           p.pageNumber !== pageNumber
             ? p
             : {
@@ -127,7 +127,8 @@ export function useReviewState(slug: string | undefined) {
                 ),
               }
         )
-      )
+        return mergeCrossPageHyphens(updated)
+      })
       setIsDirty(true)
 
       if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current)
@@ -145,52 +146,55 @@ export function useReviewState(slug: string | undefined) {
       lineText: string,
       scope: DeleteScope
     ) => {
-      setRightPages(prev => prev.map(p => ({
-        ...p,
-        lines: p.lines.map((l, idx) => {
-          let shouldDelete = false
+      setRightPages(prev => {
+        const updated = prev.map(p => ({
+          ...p,
+          lines: p.lines.map((l, idx) => {
+            let shouldDelete = false
 
-          switch (scope) {
-            case 'this':
-              shouldDelete =
-                p.pageNumber === pageNumber &&
-                l.id === lineId
-              break
+            switch (scope) {
+              case 'this':
+                shouldDelete =
+                  p.pageNumber === pageNumber &&
+                  l.id === lineId
+                break
 
-            case 'all-same-text':
-              shouldDelete =
-                l.text.trim().toLowerCase() ===
-                lineText.trim().toLowerCase()
-              break
+              case 'all-same-text':
+                shouldDelete =
+                  l.text.trim().toLowerCase() ===
+                  lineText.trim().toLowerCase()
+                break
 
-            case 'all-first-line': {
-              const nonEmpty = p.lines.filter(
-                x => x.text.trim() !== '')
-              shouldDelete =
-                nonEmpty.length > 0 &&
-                l.id === nonEmpty[0].id
-              break
+              case 'all-first-line': {
+                const nonEmpty = p.lines.filter(
+                  x => x.text.trim() !== '')
+                shouldDelete =
+                  nonEmpty.length > 0 &&
+                  l.id === nonEmpty[0].id
+                break
+              }
+
+              case 'all-last-line': {
+                const nonEmpty = p.lines.filter(
+                  x => x.text.trim() !== '')
+                shouldDelete =
+                  nonEmpty.length > 0 &&
+                  l.id === nonEmpty[nonEmpty.length - 1].id
+                break
+              }
+
+              case 'all-same-position':
+                shouldDelete = l.lineIndex === lineIndex
+                break
             }
 
-            case 'all-last-line': {
-              const nonEmpty = p.lines.filter(
-                x => x.text.trim() !== '')
-              shouldDelete =
-                nonEmpty.length > 0 &&
-                l.id === nonEmpty[nonEmpty.length - 1].id
-              break
-            }
-
-            case 'all-same-position':
-              shouldDelete = l.lineIndex === lineIndex
-              break
-          }
-
-          return shouldDelete
-            ? { ...l, deleted: true }
-            : l
-        }),
-      })))
+            return shouldDelete
+              ? { ...l, deleted: true }
+              : l
+          }),
+        }))
+        return mergeCrossPageHyphens(updated)
+      })
 
       setIsDirty(true)
       if (autoSaveTimer.current)
@@ -206,8 +210,8 @@ export function useReviewState(slug: string | undefined) {
       // Snapshot for reset
       setCleanupSnapshot(deepClonePages(rightPages))
 
-      setRightPages(prev =>
-        prev.map(page => {
+      setRightPages(prev => {
+        const updated = prev.map(page => {
           const nonEmpty = page.lines.filter(l => l.text.trim() !== '')
 
           return {
@@ -257,7 +261,8 @@ export function useReviewState(slug: string | undefined) {
             }),
           }
         })
-      )
+        return mergeCrossPageHyphens(updated)
+      })
 
       setAppliedPatternsCount(selected.length + custom.length)
       setIsDirty(true)

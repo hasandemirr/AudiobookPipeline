@@ -6,7 +6,7 @@
     "dev": "concurrently \"npm run api\" \"npm run ui\"",
     "api": "dotnet run --project src/Api/AudiobookPipeline.Api/AudiobookPipeline.Api.csproj",
     "ui": "cd src/ui && npm run dev",
-    "kill-api": "for /f \"tokens=5\" %a in ('netstat -ano ^| findstr :5000') do taskkill /PID %a /F"
+    "kill-api": "powershell -Command \"Get-NetTCPConnection -LocalPort 5000 -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }\""
   },
   "devDependencies": {
     "concurrently": "^9.0.0"

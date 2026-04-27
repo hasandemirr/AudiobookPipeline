@@ -177,7 +177,7 @@ public static class ExtractEndpoints
                     PageEnd   = entry.PageEnd,
                     Status    = "extracted",
                     Narrate   = entry.Narrate,
-                    TxtPath   = txtPath
+                    TxtPath   = paths.ToRelative(txtPath)
                 });
 
                 var pct = 10 + (int)((i + 1.0) / toc.Count * 85);
@@ -196,8 +196,12 @@ public static class ExtractEndpoints
         }
     }
 
-    private static string Slugify(string title) =>
-        System.Text.RegularExpressions.Regex
+    private static string Slugify(string title)
+    {
+        var slug = System.Text.RegularExpressions.Regex
             .Replace(title.ToLowerInvariant(), @"[^a-z0-9]", "_")
-            .Trim('_')[..Math.Min(30, title.Length)];
+            .Trim('_');
+        
+        return slug[..Math.Min(30, slug.Length)];
+    }
 }

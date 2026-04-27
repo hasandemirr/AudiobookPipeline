@@ -20,6 +20,7 @@ interface Props {
   onSave: () => void
   onApprove: () => void
   onNarrate: () => void
+  onExport: () => void
   onPrev: () => void
   onNext: () => void
 }
@@ -39,7 +40,7 @@ const statusLabel = (status: string) => {
 export function ReviewToolbar({
   slug, currentSection, currentIndex, sectionsLength,
   isDirty, lastSaved, isSaving, isApproving,
-  onSave, onApprove, onNarrate, onPrev, onNext,
+  onSave, onApprove, onNarrate, onExport, onPrev, onNext,
 }: Props) {
   const saveStatus = isSaving
     ? '⟳ Saving...'
@@ -105,8 +106,7 @@ export function ReviewToolbar({
         </Button>
 
         <Button variant="ghost" size="sm"
-          onClick={() =>
-            window.open(`/api/books/${slug}/export`, '_blank')}>
+          onClick={onExport}>
           <Download size={13} className="mr-1" />
           Export
         </Button>

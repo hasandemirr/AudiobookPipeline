@@ -8,9 +8,51 @@ public class PathService
     {
         _root = config["WorkspaceRoot"] 
             ?? FindRepoRoot(AppContext.BaseDirectory);
+        Console.WriteLine($"[PATH SERVICE] Root: {_root}");
     }
 
     public string RepoRoot => _root;
+
+    public string ToRelative(string absolutePath)
+    {
+        if (string.IsNullOrEmpty(absolutePath)) 
+            return absolutePath;
+        
+        if (absolutePath.StartsWith(_root,
+            StringComparison.OrdinalIgnoreCase))
+            return absolutePath
+                .Substring(_root.Length)
+                .TrimStart(Path.DirectorySeparatorChar);
+        
+        return absolutePath;
+    }
+
+    public string ToAbsolute(string relativePath)
+    {
+        if (string.IsNullOrEmpty(relativePath))
+            return relativePath;
+        
+        if (Path.IsPathRooted(relativePath))
+            return relativePath;
+        
+        return Path.Combine(_root, relativePath);
+    }
+
+    public string ResolveSectionPath(AudiobookPipeline.TextProcessor.Core.Models.Section section)
+    {
+        var reviewed = section.ReviewedPath;
+        var extracted = section.TxtPath;
+
+        if (!string.IsNullOrEmpty(reviewed))
+            reviewed = ToAbsolute(reviewed);
+        if (!string.IsNullOrEmpty(extracted))
+            extracted = ToAbsolute(extracted);
+
+        return !string.IsNullOrEmpty(reviewed) && File.Exists(reviewed)
+            ? reviewed
+            : extracted;
+    }
+
     public string WorkspaceDir => Path.Combine(_root, "workspace");
     public string OutputDir   => Path.Combine(_root, "output");
     public string PdfDir      => Path.Combine(_root, "assets", "raw_pdfs");

@@ -31,7 +31,7 @@ public static class SectionEndpoints
             return Results.NotFound(
                 new { message = $"{id} not found." });
 
-        var txtPath = ResolveTextPath(section);
+        var txtPath = paths.ResolveSectionPath(section);
         if (!File.Exists(txtPath))
             return Results.NotFound(
                 new { message = "Text file not found." });
@@ -92,7 +92,7 @@ public static class SectionEndpoints
         File.WriteAllText(reviewedPath, newContent,
             System.Text.Encoding.UTF8);
 
-        section.ReviewedPath = reviewedPath;
+        section.ReviewedPath = paths.ToRelative(reviewedPath);
         if (section.Status == "extracted")
             section.Status = "reviewed";
 
@@ -122,7 +122,7 @@ public static class SectionEndpoints
             return Results.NotFound(
                 new { message = $"{id} not found." });
 
-        var source = ResolveTextPath(section);
+        var source = paths.ResolveSectionPath(section);
         if (!File.Exists(source))
             return Results.BadRequest(
                 new { message = "No text file to approve." });
@@ -162,14 +162,6 @@ public static class SectionEndpoints
             narrate = section.Narrate
         });
     }
-
-    // Reviewed varsa onu, yoksa extracted txt'yi döndür
-    private static string ResolveTextPath(
-        AudiobookPipeline.TextProcessor.Core.Models.Section section) =>
-        !string.IsNullOrEmpty(section.ReviewedPath)
-        && File.Exists(section.ReviewedPath)
-            ? section.ReviewedPath
-            : section.TxtPath;
 
     // Page marker parse — "=== SAYFA N ===" formatı
     private static IEnumerable<object> ParsePages(string content) =>
