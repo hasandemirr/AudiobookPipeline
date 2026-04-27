@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import {
   Save, Check, Volume2, VolumeX,
-  ChevronLeft, ChevronRight, Download,
+  ChevronLeft, ChevronRight, Download, RotateCcw
 } from 'lucide-react'
 import { formatRelativeTime } from '../../lib/pageUtils'
 import type { Section } from '../../lib/api'
@@ -23,6 +23,7 @@ interface Props {
   onExport: () => void
   onPrev: () => void
   onNext: () => void
+  onReset: () => void
 }
 
 const statusVariant = (status: string) => {
@@ -38,9 +39,9 @@ const statusLabel = (status: string) => {
 }
 
 export function ReviewToolbar({
-  slug, currentSection, currentIndex, sectionsLength,
+  currentSection, currentIndex, sectionsLength,
   isDirty, lastSaved, isSaving, isApproving,
-  onSave, onApprove, onNarrate, onExport, onPrev, onNext,
+  onSave, onApprove, onNarrate, onExport, onPrev, onNext, onReset,
 }: Props) {
   const saveStatus = isSaving
     ? '⟳ Saving...'
@@ -78,6 +79,16 @@ export function ReviewToolbar({
             : <VolumeX size={15} className="text-muted-foreground" />}
         </Button>
 
+        {currentSection?.status !== 'extracted' && (
+          <Button variant="ghost" size="sm"
+            onClick={onReset}
+            className="text-destructive hover:bg-destructive/10 px-2"
+            title="Reset to raw extracted state">
+            <RotateCcw size={13} className="mr-1" />
+            Reset
+          </Button>
+        )}
+
         <Button variant="ghost" size="icon"
           onClick={onPrev} disabled={currentIndex <= 0}>
           <ChevronLeft size={15} />
@@ -106,7 +117,8 @@ export function ReviewToolbar({
         </Button>
 
         <Button variant="ghost" size="sm"
-          onClick={onExport}>
+          onClick={onExport}
+          disabled={isSaving || isApproving}>
           <Download size={13} className="mr-1" />
           Export
         </Button>

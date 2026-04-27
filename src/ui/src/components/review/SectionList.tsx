@@ -29,7 +29,7 @@ export function SectionList({
   selectedId, onSelect, onBack,
 }: Props) {
   return (
-    <div className="w-64 border-r flex flex-col shrink-0">
+    <div className="flex flex-col h-full overflow-hidden">
       <div className="p-3 border-b flex items-center gap-2">
         <Button variant="ghost" size="icon" onClick={onBack}>
           <ArrowLeft size={16} />

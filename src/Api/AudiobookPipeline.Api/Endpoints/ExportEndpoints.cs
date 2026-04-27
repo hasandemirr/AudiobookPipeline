@@ -40,8 +40,8 @@ public static class ExportEndpoints
                 var exists = File.Exists(txt);
                 Console.WriteLine($"[EXPORT] Section {s.Id}, Path: {txt}, Exists: {exists}");
                 return exists
-                    ? File.ReadAllText(txt, 
-                        System.Text.Encoding.UTF8).Trim()
+                    ? StripPageMarkers(File.ReadAllText(txt, 
+                        System.Text.Encoding.UTF8)).Trim()
                     : null;
             })
             .Where(t => t is not null);
@@ -85,5 +85,13 @@ public static class ExportEndpoints
                 ? File.GetLastWriteTime(exportPath)
                     .ToString("o") : null
         });
+    }
+
+    private static string StripPageMarkers(string content)
+    {
+        return string.Join('\n',
+            content.Split('\n').Where(l =>
+                !System.Text.RegularExpressions.Regex.IsMatch(
+                    l.Trim(), @"^=== SAYFA \d+ ===$")));
     }
 }

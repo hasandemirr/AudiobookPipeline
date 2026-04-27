@@ -1,11 +1,10 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import type { DetectedPattern } from '../../lib/api'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Separator } from '@/components/ui/separator'
 import {
   ChevronDown, ChevronUp,
-  Trash2, RotateCcw, Plus
+  Trash2, RotateCcw
 } from 'lucide-react'
 
 export type PatternSelection = {
@@ -26,37 +25,24 @@ interface CleanupPanelProps {
     selected: DetectedPattern[],
     custom: CustomPattern[]
   ) => void
+  onPreview: (
+    selected: DetectedPattern[],
+    custom: CustomPattern[]
+  ) => void
   onReset: () => void
   appliedCount: number
-}
-
-function ConfidenceBadge({ conf }: { conf: string }) {
-  if (conf === 'high')
-    return (
-      <Badge variant="default" className="text-xs h-4 px-1">
-        high
-      </Badge>
-    )
-  if (conf === 'medium')
-    return (
-      <Badge variant="secondary" className="text-xs h-4 px-1">
-        medium
-      </Badge>
-    )
-  return (
-    <Badge variant="outline" className="text-xs h-4 px-1">
-      low
-    </Badge>
-  )
 }
 
 export function CleanupPanel({
   patterns,
   onApply,
+  onPreview,
   onReset,
   appliedCount,
 }: CleanupPanelProps) {
-  const [isOpen, setIsOpen] = useState(true)
+  const [openGroups, setOpenGroups] = useState<Set<string>>(
+    () => new Set(['high'])
+  )
 
   const [selections, setSelections] = useState<PatternSelection[]>(() =>
     patterns.map(p => ({
@@ -70,31 +56,17 @@ export function CleanupPanel({
   const [customMatchType, setCustomMatchType] =
     useState<CustomPattern['matchType']>('exact')
 
+  useEffect(() => {
+    const selected = selections.filter(s => s.checked).map(s => s.pattern)
+    onPreview(selected, customPatterns.filter(c => c.checked))
+  }, [selections, customPatterns, onPreview])
+
   const selectedCount = useMemo(
     () =>
       selections.filter(s => s.checked).length +
       customPatterns.filter(c => c.checked).length,
     [selections, customPatterns]
   )
-
-  const allChecked = useMemo(
-    () =>
-      selections.length > 0 &&
-      selections.every(s => s.checked) &&
-      (customPatterns.length === 0 ||
-        customPatterns.every(c => c.checked)),
-    [selections, customPatterns]
-  )
-
-  const toggleAll = () => {
-    const next = !allChecked
-    setSelections(prev =>
-      prev.map(s => ({ ...s, checked: next }))
-    )
-    setCustomPatterns(prev =>
-      prev.map(c => ({ ...c, checked: next }))
-    )
-  }
 
   const togglePattern = (index: number) =>
     setSelections(prev =>
@@ -140,263 +112,182 @@ export function CleanupPanel({
     )
   }
 
+  const toggleGroup = (key: string) =>
+    setOpenGroups(prev => {
+      const next = new Set(prev)
+      next.has(key) ? next.delete(key) : next.add(key)
+      return next
+    })
+
   const groups = [
     {
+      key: 'high',
       label: 'High confidence',
-      items: selections.filter(
-        s => s.pattern.confidence === 'high'),
+      items: selections.filter(s => s.pattern.confidence === 'high'),
     },
     {
+      key: 'medium',
       label: 'Medium confidence',
-      items: selections.filter(
-        s => s.pattern.confidence === 'medium'),
+      items: selections.filter(s => s.pattern.confidence === 'medium'),
     },
     {
+      key: 'low',
       label: 'Low confidence',
-      items: selections.filter(
-        s => s.pattern.confidence === 'low'),
+      items: selections.filter(s => s.pattern.confidence === 'low'),
     },
   ]
 
   return (
-    <div className="border-b bg-muted/10 shrink-0
-                    flex flex-col"
-         style={{ maxHeight: isOpen ? '280px' : 'auto' }}>
+    <div className="flex flex-col h-full">
 
-      {/* ── Panel header — always visible ── */}
-      <div
-        className="px-4 py-2 flex items-center
-                   justify-between cursor-pointer
-                   hover:bg-muted/20 transition-colors
-                   shrink-0 border-b"
-        onClick={() => setIsOpen(v => !v)}
-      >
+      {/* Header row */}
+      <div className="px-3 py-2 flex items-center justify-between
+                      border-b shrink-0">
+        <span className="text-xs font-medium">Cleanup</span>
         <div className="flex items-center gap-2">
-          <span className="text-xs font-medium">
-            Cleanup
-          </span>
-          {appliedCount > 0 && (
-            <Badge variant="secondary"
-              className="text-xs h-4 px-1">
-              {appliedCount} applied
-            </Badge>
-          )}
-          {selectedCount > 0 && appliedCount === 0 && (
-            <Badge variant="outline"
-              className="text-xs h-4 px-1">
-              {selectedCount} selected
-            </Badge>
-          )}
-        </div>
-        <div className="flex items-center gap-3">
           {appliedCount > 0 && (
             <button
-              onClick={e => {
-                e.stopPropagation()
-                onReset()
-              }}
+              onClick={onReset}
               className="flex items-center gap-1
                          text-xs text-muted-foreground
                          hover:text-foreground
                          transition-colors"
             >
-              <RotateCcw size={12} />
+              <RotateCcw size={11} />
               Reset
             </button>
           )}
-          {isOpen
-            ? <ChevronUp size={14}
-                className="text-muted-foreground" />
-            : <ChevronDown size={14}
-                className="text-muted-foreground" />
-          }
+          {selectedCount > 0 && (
+            <Badge variant="outline" className="text-xs h-4 px-1">
+              {selectedCount}
+            </Badge>
+          )}
         </div>
       </div>
 
-      {isOpen && (
-        <>
-          {/* ── Scrollable pattern list ── */}
-          <div className="overflow-y-auto flex-1 px-4 py-2
-                          space-y-3 min-h-0">
+      {/* Scrollable accordion list */}
+      <div className="overflow-y-auto flex-1 min-h-0">
+        {groups.map(group => group.items.length === 0 ? null : (
+          <div key={group.key}>
 
-            {/* Select all */}
-            <label className="flex items-center
-                               gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={allChecked}
-                onChange={toggleAll}
-                className="rounded"
-              />
-              <span className="text-xs text-muted-foreground">
-                Select all ({patterns.length} patterns)
-              </span>
-            </label>
-
-            <Separator />
-
-            {/* Pattern groups */}
-            {groups.map(group =>
-              group.items.length === 0 ? null : (
-                <div key={group.label} className="space-y-1">
-                  <p className="text-xs text-muted-foreground/60
-                                font-medium uppercase
-                                tracking-wide">
-                    {group.label}
-                  </p>
-                  {group.items.map(s => {
-                    const idx = selections.indexOf(s)
-                    return (
-                      <label
-                        key={s.pattern.text +
-                             s.pattern.position}
-                        className="flex items-start gap-2
-                                   cursor-pointer"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={s.checked}
-                          onChange={() => togglePattern(idx)}
-                          className="rounded mt-0.5 shrink-0"
-                        />
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center
-                                          gap-1.5 flex-wrap">
-                            <span className="text-xs
-                                             font-mono">
-                              {s.pattern.text}
-                            </span>
-                            <ConfidenceBadge
-                              conf={s.pattern.confidence} />
-                            {s.pattern.is_page_number && (
-                              <Badge variant="outline"
-                                className="text-xs h-4 px-1
-                                           text-blue-600
-                                           dark:text-blue-400">
-                                page no
-                              </Badge>
-                            )}
-                          </div>
-                          <p className="text-xs
-                                        text-muted-foreground/60">
-                            {s.pattern.position} line
-                            · {s.pattern.page_count} pages
-                          </p>
-                        </div>
-                      </label>
-                    )
-                  })}
-                </div>
-              )
-            )}
-
-            {/* Custom patterns */}
-            {customPatterns.length > 0 && (
-              <>
-                <Separator />
-                <div className="space-y-1">
-                  <p className="text-xs
-                                text-muted-foreground/60
-                                font-medium uppercase
-                                tracking-wide">
-                    Custom
-                  </p>
-                  {customPatterns.map(c => (
-                    <label key={c.id}
-                      className="flex items-center
-                                 gap-2 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={c.checked}
-                        onChange={() => toggleCustom(c.id)}
-                        className="rounded shrink-0"
-                      />
-                      <span className="text-xs font-mono
-                                       flex-1 truncate">
-                        {c.text}
-                      </span>
-                      <span className="text-xs
-                                       text-muted-foreground/60
-                                       shrink-0">
-                        {c.matchType}
-                      </span>
-                      <button
-                        onClick={() => removeCustom(c.id)}
-                        className="text-muted-foreground
-                                   hover:text-destructive
-                                   shrink-0 transition-colors"
-                      >
-                        <Trash2 size={12} />
-                      </button>
-                    </label>
-                  ))}
-                </div>
-              </>
-            )}
-          </div>
-
-          {/* ── Fixed footer — always visible ── */}
-          <div className="px-4 py-2 border-t bg-muted/10
-                          shrink-0 space-y-2">
-
-            {/* Custom input */}
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={customInput}
-                onChange={e =>
-                  setCustomInput(e.target.value)}
-                onKeyDown={e => {
-                  if (e.key === 'Enter')
-                    addCustomPattern()
-                }}
-                placeholder="Add custom pattern..."
-                className="flex-1 px-2 py-1 text-xs
-                           border rounded bg-background
-                           focus:outline-none
-                           focus:ring-1 focus:ring-ring"
-              />
-              <select
-                value={customMatchType}
-                onChange={e =>
-                  setCustomMatchType(
-                    e.target.value as
-                      CustomPattern['matchType']
-                  )}
-                className="text-xs border rounded
-                           bg-background px-1
-                           focus:outline-none"
-              >
-                <option value="exact">exact</option>
-                <option value="starts-with">starts</option>
-                <option value="ends-with">ends</option>
-              </select>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={addCustomPattern}
-                disabled={!customInput.trim()}
-                className="shrink-0 px-2"
-              >
-                <Plus size={12} />
-              </Button>
-            </div>
-
-            {/* Apply button */}
-            <Button
-              size="sm"
-              className="w-full"
-              onClick={handleApply}
-              disabled={selectedCount === 0}
+            {/* Group header — clickable */}
+            <button
+              onClick={() => toggleGroup(group.key)}
+              className="w-full flex items-center justify-between
+                         px-3 py-1.5 text-xs font-medium
+                         text-muted-foreground hover:bg-muted/40
+                         transition-colors border-b"
             >
-              <Trash2 size={13} className="mr-1.5" />
-              Apply to all pages
-              {selectedCount > 0 &&
-                ` (${selectedCount})`}
-            </Button>
+              <span>{group.label}</span>
+              <div className="flex items-center gap-1.5">
+                <Badge variant="outline" className="text-xs h-4 px-1">
+                  {group.items.length}
+                </Badge>
+                {openGroups.has(group.key)
+                  ? <ChevronUp size={11} />
+                  : <ChevronDown size={11} />}
+              </div>
+            </button>
+
+            {/* Group items — shown when open */}
+            {openGroups.has(group.key) && (
+              <div className="px-3 py-1 space-y-1">
+                {group.items.map((s, idx) => {
+                  const globalIdx = selections.indexOf(s)
+                  return (
+                    <label key={idx}
+                      className="flex items-start gap-2 cursor-pointer
+                                 py-0.5">
+                      <input type="checkbox" checked={s.checked}
+                        onChange={() => togglePattern(globalIdx)}
+                        className="mt-0.5 rounded shrink-0" />
+                      <div className="min-w-0">
+                        <span className="text-xs font-mono truncate block">
+                          {s.pattern.text}
+                        </span>
+                        <span className="text-xs text-muted-foreground/60">
+                          {s.pattern.position} · {s.pattern.page_count}p
+                          {s.pattern.is_page_number ? ' · page no' : ''}
+                        </span>
+                      </div>
+                    </label>
+                  )
+                })}
+              </div>
+            )}
           </div>
-        </>
-      )}
+        ))}
+
+        {/* Custom patterns */}
+        {customPatterns.length > 0 && (
+          <div>
+            <div className="px-3 py-1.5 text-xs font-medium
+                            text-muted-foreground border-b">
+              Custom
+            </div>
+            <div className="px-3 py-1 space-y-1">
+              {customPatterns.map(c => (
+                <label key={c.id}
+                  className="flex items-center gap-2 cursor-pointer py-0.5">
+                  <input type="checkbox" checked={c.checked}
+                    onChange={() => toggleCustom(c.id)}
+                    className="rounded shrink-0" />
+                  <span className="text-xs font-mono flex-1 truncate">
+                    {c.text}
+                  </span>
+                  <span className="text-xs text-muted-foreground/60 shrink-0">
+                    {c.matchType}
+                  </span>
+                  <button
+                    onClick={() => removeCustom(c.id)}
+                    className="text-muted-foreground hover:text-destructive
+                               shrink-0 transition-colors"
+                  >
+                    <Trash2 size={11} />
+                  </button>
+                </label>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Custom pattern input */}
+        <div className="px-3 py-2 border-t">
+          <div className="flex gap-1">
+            <input
+              type="text" value={customInput}
+              onChange={e => setCustomInput(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && addCustomPattern()}
+              placeholder="Custom pattern..."
+              className="flex-1 text-xs px-2 py-1 border rounded
+                         bg-background focus:outline-none
+                         focus:ring-1 focus:ring-ring min-w-0"
+            />
+            <select value={customMatchType}
+              onChange={e => setCustomMatchType(
+                e.target.value as CustomPattern['matchType'])}
+              className="text-xs border rounded bg-background px-1">
+              <option value="exact">=</option>
+              <option value="starts-with">^</option>
+              <option value="ends-with">$</option>
+            </select>
+            <button onClick={addCustomPattern}
+              className="px-2 py-1 border rounded text-xs
+                         hover:bg-muted transition-colors">
+              +
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Apply button — always visible, outside scroll */}
+      <div className="px-3 py-2 border-t shrink-0">
+        <Button size="sm" className="w-full text-xs"
+          onClick={handleApply} disabled={selectedCount === 0}>
+          <Trash2 size={11} className="mr-1" />
+          Apply ({selectedCount})
+        </Button>
+      </div>
     </div>
   )
 }

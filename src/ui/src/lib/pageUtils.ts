@@ -13,6 +13,7 @@ export interface LineItem {
   suspicious: boolean
   mergeType?: 'target' | 'source'
   mergedWith?: string
+  previewing?: boolean
 }
 
 const PAGE_MARKER = '=== SAYFA '
@@ -206,7 +207,7 @@ export function mergeCrossPageHyphens(
 
     // Find first visible non-empty line of next page
     const firstLineIndex = nextPage.lines.findIndex(
-      l => !l.deleted && l.text.trim() !== ''
+      l => !l.deleted && !l.suspicious && l.text.trim() !== ''
     )
     if (firstLineIndex === -1) continue
 
@@ -214,7 +215,17 @@ export function mergeCrossPageHyphens(
 
     // Extract first word from next page's first line
     const nextWords = firstLine.text.trimStart().split(/\s+/)
-    const firstWord = nextWords[0]
+
+    // Skip leading words that look like embedded headers
+    // (handles "İLYADA soğlu..." where İLYADA was merged by API)
+    let wordIdx = 0
+    while (
+      wordIdx < nextWords.length &&
+      isSuspicious(nextWords[wordIdx])
+    ) {
+      wordIdx++
+    }
+    const firstWord = nextWords[wordIdx]
     if (!firstWord) continue
 
     // Merge: remove hyphen from end, append first word
@@ -229,8 +240,13 @@ export function mergeCrossPageHyphens(
       mergedWith: firstLine.id,
     }
 
-    // Remove first word from source line (next page first line)
-    const remainingText = nextWords.slice(1).join(' ')
+    // Remove only the merged word from the source line.
+    // Keep any skipped suspicious words (they stay for cleanup).
+    const beforeMerged = nextWords.slice(0, wordIdx).join(' ')
+    const afterMerged = nextWords.slice(wordIdx + 1).join(' ')
+    const remainingText = [beforeMerged, afterMerged]
+      .filter(s => s.trim() !== '')
+      .join(' ')
 
     if (remainingText.trim() === '') {
       // Whole line was the continuation — mark deleted

@@ -161,7 +161,9 @@ public static class ExtractEndpoints
                                  && p.PageNumber <= entry.PageEnd)
                         .Select(p =>
                         {
-                            var t = extractor.JoinBrokenLines(p.Text);
+                            var t = extractor.RemovePageNumbers(p.Text);
+                            t = extractor.StripEmbeddedPageNumbers(t);
+                            t = extractor.JoinBrokenLines(t);
                             return extractor.FormatPageWithMarker(
                                 p.PageNumber, t);
                         }));

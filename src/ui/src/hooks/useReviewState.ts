@@ -11,6 +11,7 @@ import {
 } from '../lib/pageUtils'
 import type { DetectedPattern } from '../lib/api'
 import type { CustomPattern } from '../components/review/CleanupPanel'
+import type { DeleteScope } from '../components/review/LineActionMenu'
 
 export function useReviewState(slug: string | undefined) {
   const queryClient = useQueryClient()
@@ -24,6 +25,7 @@ export function useReviewState(slug: string | undefined) {
 
   const [appliedPatternsCount, setAppliedPatternsCount] = useState(0)
   const [cleanupSnapshot, setCleanupSnapshot] = useState<PageBlock[] | null>(null)
+  const [previewIds, setPreviewIds] = useState<Set<string>>(new Set())
 
   const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -46,12 +48,10 @@ export function useReviewState(slug: string | undefined) {
     if (!sectionData) return
 
     const repeatedLines  = sectionData.repeated_lines  ?? []
-    const repeatedTokens = sectionData.repeated_tokens ?? []
 
     const parsed = parsePages(
       sectionData.content,
-      repeatedLines,
-      repeatedTokens
+      repeatedLines
     )
 
     setLeftPages(parsed)
@@ -92,7 +92,7 @@ export function useReviewState(slug: string | undefined) {
       setIsDirty(false)
       setLastSaved(new Date())
       queryClient.invalidateQueries({ queryKey: ['book', slug] })
-      queryClient.invalidateQueries({
+      queryClient.resetQueries({
         queryKey: ['section', slug, selectedId],
       })
     },
@@ -100,6 +100,24 @@ export function useReviewState(slug: string | undefined) {
       const message = err instanceof ApiError
         ? err.message
         : 'Approve failed.'
+      toast.error(message)
+    },
+  })
+
+  // Reset
+  const resetSectionMutation = useMutation({
+    mutationFn: () => api.resetSection(slug!, selectedId!),
+    onSuccess: () => {
+      toast.success('Section reset to raw.')
+      queryClient.resetQueries({
+        queryKey: ['section', slug, selectedId],
+      })
+      queryClient.invalidateQueries({ queryKey: ['book', slug] })
+    },
+    onError: (err) => {
+      const message = err instanceof ApiError
+        ? err.message
+        : 'Reset failed.'
       toast.error(message)
     },
   })
@@ -149,7 +167,7 @@ export function useReviewState(slug: string | undefined) {
       setRightPages(prev => {
         const updated = prev.map(p => ({
           ...p,
-          lines: p.lines.map((l, idx) => {
+          lines: p.lines.map((l) => {
             let shouldDelete = false
 
             switch (scope) {
@@ -212,11 +230,13 @@ export function useReviewState(slug: string | undefined) {
 
       setRightPages(prev => {
         const updated = prev.map(page => {
-          const nonEmpty = page.lines.filter(l => l.text.trim() !== '')
+          const nonEmpty = page.lines.filter(
+            l => !l.deleted && l.text.trim() !== ''
+          )
 
           return {
             ...page,
-            lines: page.lines.map((line, lineIdx) => {
+            lines: page.lines.map((line) => {
               if (line.deleted) return line
 
               const trimmed = line.text.trim()
@@ -266,11 +286,53 @@ export function useReviewState(slug: string | undefined) {
 
       setAppliedPatternsCount(selected.length + custom.length)
       setIsDirty(true)
+      setPreviewIds(new Set())
 
       if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current)
       autoSaveTimer.current = setTimeout(() => saveMutation.mutate(), 2000)
     },
     [rightPages, saveMutation]
+  )
+
+  const previewCleanup = useCallback(
+    (selected: DetectedPattern[], custom: CustomPattern[]) => {
+      const ids = new Set<string>()
+      rightPages.forEach(page => {
+        const nonEmpty = page.lines.filter(
+          l => !l.deleted && l.text.trim() !== '')
+        page.lines.forEach(line => {
+          if (line.deleted) return
+          const trimmed = line.text.trim()
+          for (const p of selected) {
+            const matches = trimmed.toLowerCase() ===
+              p.text.toLowerCase()
+            if (!matches) continue
+            if (p.position === 'first') {
+              if (nonEmpty[0]?.id === line.id) ids.add(line.id)
+            } else if (p.position === 'last') {
+              if (nonEmpty[nonEmpty.length - 1]?.id === line.id)
+                ids.add(line.id)
+            } else {
+              ids.add(line.id)
+            }
+            break
+          }
+          if (!ids.has(line.id)) {
+            for (const cp of custom) {
+              const t = trimmed.toLowerCase()
+              const v = cp.text.toLowerCase()
+              if (
+                (cp.matchType === 'exact' && t === v) ||
+                (cp.matchType === 'starts-with' && t.startsWith(v)) ||
+                (cp.matchType === 'ends-with' && t.endsWith(v))
+              ) { ids.add(line.id); break }
+            }
+          }
+        })
+      })
+      setPreviewIds(ids)
+    },
+    [rightPages]
   )
 
   const resetCleanup = useCallback(() => {
@@ -279,6 +341,7 @@ export function useReviewState(slug: string | undefined) {
     setCleanupSnapshot(null)
     setAppliedPatternsCount(0)
     setIsDirty(true)
+    setPreviewIds(new Set())
   }, [cleanupSnapshot])
 
   // Delete pattern across all pages
@@ -309,6 +372,26 @@ export function useReviewState(slug: string | undefined) {
       toast.success(`${count} lines marked for deletion.`)
     },
     [rightPages]
+  )
+
+  const deletePage = useCallback(
+    (pageNumber: number) => {
+      setRightPages(prev => {
+        const updated = prev.map(p =>
+          p.pageNumber !== pageNumber
+            ? p
+            : {
+                ...p,
+                lines: p.lines.map(l => ({ ...l, deleted: true })),
+              }
+        )
+        return mergeCrossPageHyphens(updated)
+      })
+      setIsDirty(true)
+      if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current)
+      autoSaveTimer.current = setTimeout(() => saveMutation.mutate(), 2000)
+    },
+    [saveMutation]
   )
 
   // Navigate to specific page index
@@ -360,6 +443,7 @@ export function useReviewState(slug: string | undefined) {
     // Mutations
     saveMutation,
     approveMutation,
+    resetSectionMutation,
     narrateMutation,
     // Actions
     goTo,
@@ -367,8 +451,11 @@ export function useReviewState(slug: string | undefined) {
     toggleLine,
     applyDelete,
     applyCleanup,
+    previewCleanup,
+    previewIds,
     resetCleanup,
     appliedPatternsCount,
     deletePatternGlobal,
+    deletePage,
   }
 }

@@ -23,3 +23,5 @@ repomix-output*.txt
 
 # Vite build output
 src/ui/dist/
+repomix-output.xml
+assets/raw_texts/test_book.txt

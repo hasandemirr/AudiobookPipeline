@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Trash2 } from 'lucide-react'
 import type { PageBlock } from '../../lib/pageUtils'
 import {
   LineActionMenu,
@@ -9,6 +10,7 @@ interface EditablePageProps {
   page: PageBlock
   isActive: boolean
   absoluteIndex: number
+  previewIds?: Set<string>
   onToggleLine: (pageNumber: number, lineId: string) => void
   onApplyDelete: (
     pageNumber: number,
@@ -18,6 +20,7 @@ interface EditablePageProps {
     scope: DeleteScope
   ) => void
   onDeletePattern: (pattern: string) => void
+  onDeletePage: (pageNumber: number) => void
   onPageFocus: (absoluteIndex: number) => void
 }
 
@@ -25,9 +28,11 @@ export function EditablePage({
   page,
   isActive,
   absoluteIndex,
+  previewIds = new Set(),
   onToggleLine,
   onApplyDelete,
   onDeletePattern,
+  onDeletePage,
   onPageFocus,
 }: EditablePageProps) {
   const [menu, setMenu] = useState<{
@@ -39,6 +44,9 @@ export function EditablePage({
   } | null>(null)
 
   const deletedCount = page.lines.filter(l => l.deleted).length
+  const allDeleted = page.lines
+    .filter(l => l.text.trim() !== '')
+    .every(l => l.deleted)
 
   return (
     <div
@@ -48,15 +56,29 @@ export function EditablePage({
         transition-colors cursor-default
         ${isActive ? 'border-primary/40' : ''}`}
     >
-      <div className="px-3 py-1.5 bg-muted/60 text-xs
+      <div className={`px-3 py-1.5 ${allDeleted ? 'bg-destructive/10' : 'bg-muted/60'} text-xs
                       font-mono text-muted-foreground
-                      border-b flex items-center justify-between">
+                      border-b flex items-center justify-between group/header`}>
         <span>Page {page.pageNumber}</span>
-        {deletedCount > 0 && (
-          <span className="text-destructive/70">
-            {deletedCount} to delete
-          </span>
-        )}
+        <div className="flex items-center gap-2">
+          {deletedCount > 0 && (
+            <span className="text-destructive/70">
+              {deletedCount} to delete
+            </span>
+          )}
+          <button
+            onClick={e => {
+              e.stopPropagation()
+              onDeletePage(page.pageNumber)
+            }}
+            className="opacity-0 group-hover/header:opacity-100
+                       text-muted-foreground hover:text-destructive
+                       transition-opacity"
+            title="Delete entire page"
+          >
+            <Trash2 size={12} />
+          </button>
+        </div>
       </div>
       <div className="p-2 space-y-0.5 min-h-[60px]">
         {page.lines.map(line =>
@@ -92,9 +114,11 @@ export function EditablePage({
                     ? 'line-through text-muted-foreground/40 bg-destructive/10'
                     : line.mergeType === 'target'
                       ? 'bg-green-500/10 text-green-700 dark:text-green-400'
-                      : line.suspicious
-                        ? 'bg-amber-500/10 hover:bg-destructive/10 text-amber-700 dark:text-amber-400'
-                        : 'hover:bg-muted/60'
+                      : previewIds.has(line.id)
+                        ? 'bg-amber-500/20 border border-amber-500/50 border-dashed text-amber-700 dark:text-amber-400'
+                        : line.suspicious
+                          ? 'bg-amber-500/10 hover:bg-destructive/10 text-amber-700 dark:text-amber-400'
+                          : 'hover:bg-muted/60'
                 }
               `}
             >

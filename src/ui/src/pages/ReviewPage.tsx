@@ -1,3 +1,4 @@
+import { useState, useRef, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useReviewState } from '../hooks/useReviewState'
 import { getPageWindow } from '../lib/pageUtils'
@@ -26,6 +27,7 @@ export default function ReviewPage() {
     sectionData,
     saveMutation,
     approveMutation,
+    resetSectionMutation,
     narrateMutation,
     activePageIndex,
     setActivePageIndex,
@@ -34,13 +36,43 @@ export default function ReviewPage() {
     toggleLine,
     applyDelete,
     applyCleanup,
+    previewCleanup,
+    previewIds,
     resetCleanup,
     appliedPatternsCount,
     deletePatternGlobal,
+    deletePage,
   } = useReviewState(slug)
 
-  const leftWindow  = getPageWindow(leftPages, activePageIndex)
+  const leftWindow = getPageWindow(leftPages, activePageIndex)
   const rightWindow = getPageWindow(rightPages, activePageIndex)
+
+  // Resizable cleanup panel height
+  const [cleanupHeight, setCleanupHeight] = useState(280)
+  const dragRef = useRef<{ startY: number; startH: number } | null>(null)
+
+  const onDragStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault()
+    dragRef.current = { startY: e.clientY, startH: cleanupHeight }
+
+    const onMove = (ev: MouseEvent) => {
+      if (!dragRef.current) return
+      const delta = dragRef.current.startY - ev.clientY
+      const next = Math.min(500, Math.max(120, dragRef.current.startH + delta))
+      setCleanupHeight(next)
+    }
+    const onUp = () => {
+      dragRef.current = null
+      document.removeEventListener('mousemove', onMove)
+      document.removeEventListener('mouseup', onUp)
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+    }
+    document.addEventListener('mousemove', onMove)
+    document.addEventListener('mouseup', onUp)
+    document.body.style.cursor = 'ns-resize'
+    document.body.style.userSelect = 'none'
+  }, [cleanupHeight])
 
   if (manifestLoading)
     return (
@@ -49,14 +81,45 @@ export default function ReviewPage() {
 
   return (
     <div className="flex h-full overflow-hidden">
-      <SectionList
-        slug={slug}
-        manifest={manifest}
-        sections={sections}
-        selectedId={selectedId}
-        onSelect={goTo}
-        onBack={() => navigate('/')}
-      />
+      <div className="w-64 border-r flex flex-col shrink-0 overflow-hidden">
+        <div className="flex-1 overflow-hidden">
+          <SectionList
+            slug={slug}
+            manifest={manifest}
+            sections={sections}
+            selectedId={selectedId}
+            onSelect={goTo}
+            onBack={() => navigate('/')}
+          />
+        </div>
+
+        {selectedId && !sectionLoading &&
+          (sectionData?.detected_patterns?.length ?? 0) > 0 && (
+            <>
+              {/* Drag handle */}
+              <div
+                onMouseDown={onDragStart}
+                className="h-1.5 shrink-0 cursor-ns-resize
+                           border-t border-b bg-muted/30
+                           hover:bg-primary/20 active:bg-primary/30
+                           transition-colors flex items-center
+                           justify-center"
+              >
+                <div className="w-8 h-0.5 rounded-full bg-muted-foreground/30" />
+              </div>
+              <div className="shrink-0 overflow-hidden"
+                   style={{ height: cleanupHeight }}>
+                <CleanupPanel
+                  patterns={sectionData.detected_patterns}
+                  onApply={applyCleanup}
+                  onPreview={previewCleanup}
+                  onReset={resetCleanup}
+                  appliedCount={appliedPatternsCount}
+                />
+              </div>
+            </>
+          )}
+      </div>
 
       <div className="flex-1 flex flex-col overflow-hidden">
         {!selectedId ? (
@@ -90,18 +153,8 @@ export default function ReviewPage() {
               onNext={() =>
                 currentIndex < sections.length - 1 &&
                 goTo(sections[currentIndex + 1].id)}
+              onReset={() => resetSectionMutation.mutate()}
             />
-
-            {/* Cleanup panel */}
-            {selectedId && !sectionLoading &&
-              (sectionData?.detected_patterns?.length ?? 0) > 0 && (
-              <CleanupPanel
-                patterns={sectionData.detected_patterns}
-                onApply={applyCleanup}
-                onReset={resetCleanup}
-                appliedCount={appliedPatternsCount}
-              />
-            )}
 
             {/* Pagination bar */}
             {rightPages.length > 10 && (
@@ -196,6 +249,8 @@ export default function ReviewPage() {
                             onToggleLine={toggleLine}
                             onApplyDelete={applyDelete}
                             onDeletePattern={deletePatternGlobal}
+                            onDeletePage={deletePage}
+                            previewIds={previewIds}
                             onPageFocus={setActivePageIndex}
                           />
                         </div>

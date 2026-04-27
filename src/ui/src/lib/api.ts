@@ -1,11 +1,13 @@
 const BASE = '/api'
 
 export class ApiError extends Error {
+  status: number
   constructor(
-    public readonly status: number,
+    status: number,
     message: string
   ) {
     super(message)
+    this.status = status
     this.name = 'ApiError'
   }
 }
@@ -162,6 +164,12 @@ export const api = {
   deleteOutput: (slug: string) =>
     request<{ message: string; deleted: string[] }>(
       `${BASE}/books/${slug}/output`,
+      { method: 'DELETE' }
+    ),
+
+  resetSection: (slug: string, id: string) =>
+    request<{ id: string; status: string }>(
+      `${BASE}/books/${slug}/sections/${id}/reviewed`,
       { method: 'DELETE' }
     ),
 }

@@ -13,6 +13,8 @@ public static class SectionEndpoints
             ApproveSection);
         app.MapPatch("/api/books/{slug}/sections/{id}/narrate", 
             ToggleNarrate);
+        app.MapDelete("/api/books/{slug}/sections/{id}/reviewed", 
+            ResetSection);
     }
 
     private static IResult GetSection(
@@ -160,6 +162,40 @@ public static class SectionEndpoints
         {
             id = section.Id,
             narrate = section.Narrate
+        });
+    }
+
+    private static IResult ResetSection(
+        string slug, string id,
+        PathService paths, ManifestService svc)
+    {
+        if (!paths.ManifestExists(slug))
+            return Results.NotFound(
+                new { message = $"{slug} not found." });
+
+        var manifest = svc.Load(paths.ManifestPath(slug));
+        var section = manifest.Sections
+            .FirstOrDefault(s => s.Id == id);
+
+        if (section is null)
+            return Results.NotFound(
+                new { message = $"{id} not found." });
+
+        if (!string.IsNullOrEmpty(section.ReviewedPath))
+        {
+            var fullPath = paths.ToAbsolute(section.ReviewedPath);
+            if (File.Exists(fullPath))
+                File.Delete(fullPath);
+
+            section.ReviewedPath = null;
+            section.Status = "extracted";
+            svc.Save(paths.ManifestPath(slug), manifest);
+        }
+
+        return Results.Ok(new
+        {
+            id = section.Id,
+            status = "extracted"
         });
     }
 
