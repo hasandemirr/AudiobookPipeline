@@ -78,7 +78,7 @@ akışındaki kritik bug'ları gidermek için yapıldı.
 
 | Sprint | İş | Durum |
 |--------|-----|-------|
-| **1.1** | BaseTTSEngine (ABC) + ChatterboxEngine adapter + registry | ⬜ |
+| **1.1** | BaseTTSEngine (ABC) + ChatterboxEngine adapter + registry (`src/tts/`, smoke test: load→synthesize→unload, VRAM ~3.2GB→~8MB) | ✅ |
 | **1.2** | FastAPI TTS Servisi (port 5001, /render, /engines, /voices, /health) | ⬜ |
 | **1.3** | .NET → TTS Proxy (`TtsEndpoints`, `VoiceEndpoints`, IHttpClientFactory) | ⬜ |
 | **1.4** | render_chunks.py retire (`scripts/legacy/`'e taşı) | ⬜ |
