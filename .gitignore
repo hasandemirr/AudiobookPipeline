@@ -25,3 +25,8 @@ repomix-output*.txt
 src/ui/dist/
 repomix-output.xml
 assets/raw_texts/test_book.txt
+
+venv/
+chatterbox/
+
+repomix.config.json

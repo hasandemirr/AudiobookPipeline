@@ -2,6 +2,9 @@ using AudiobookPipeline.TextProcessor.Core.Services;
 using AudiobookPipeline.Api.Hubs;
 using AudiobookPipeline.Api.Services;
 using AudiobookPipeline.Api.Endpoints;
+using AudiobookPipeline.Api.Jobs;
+using Microsoft.Extensions.Options;
+using AudiobookPipeline.Api.Config;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -24,6 +27,23 @@ builder.Services.AddSignalR();
 builder.Services.AddSingleton<PathService>();
 builder.Services.AddSingleton<ManifestService>();
 
+builder.Services.Configure<ExtractConfig>(
+    builder.Configuration.GetSection("Extract"));
+
+builder.Services.AddScoped<AudiobookPipeline.TextProcessor.Core.Services.TocParserService>();
+builder.Services.AddScoped<AudiobookPipeline.TextProcessor.Core.Services.PdfExtractService>();
+builder.Services.AddScoped<AudiobookPipeline.TextProcessor.Core.Services.OcrFixService>(
+    sp => new AudiobookPipeline.TextProcessor.Core.Services.OcrFixService(
+        sp.GetRequiredService<PathService>().OcrRulesPath));
+builder.Services.AddScoped<AudiobookPipeline.TextProcessor.Core.Services.HeaderFooterDetector>(
+    sp =>
+    {
+        var cfg = sp.GetRequiredService<IOptions<ExtractConfig>>().Value;
+        return new HeaderFooterDetector(
+            minRepeatCount: cfg.HeaderFooterMinRepeatCount,
+            scanLines:      cfg.HeaderFooterScanLines);
+    });
+
 // Force snake_case for all JSON responses
 builder.Services.ConfigureHttpJsonOptions(options => {
     options.SerializerOptions.PropertyNamingPolicy = 
@@ -36,6 +56,9 @@ builder.Services.Configure<Microsoft.AspNetCore.Mvc.JsonOptions>(options => {
     options.JsonSerializerOptions.PropertyNamingPolicy = 
         System.Text.Json.JsonNamingPolicy.SnakeCaseLower;
 });
+
+builder.Services.AddSingleton<BackgroundTaskQueue>();
+builder.Services.AddHostedService<QueuedHostedService>();
 
 var app = builder.Build();
 

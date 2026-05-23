@@ -4,118 +4,87 @@ $repoRoot = $PSScriptRoot
 Write-Host ""
 Write-Host "=== AudiobookPipeline Python/TTS Kurulum ===" -ForegroundColor Cyan
 Write-Host "Repo koku: $repoRoot"
-Write-Host ""
 
-# 1. .env kontrol
+# 0. prerequisites
 $envPath = Join-Path $repoRoot ".env"
-if (-not (Test-Path $envPath)) {
-    Write-Host "HATA: .env bulunamadi." -ForegroundColor Red
-    Write-Host "Once .\setup.ps1 calistirin." -ForegroundColor Yellow
-    exit 1
-}
+if (-not (Test-Path $envPath)) { Write-Host "HATA: .env yok. Once .\setup.ps1 calistirin." -ForegroundColor Red; exit 1 }
+if (-not (Get-Command git -ErrorAction SilentlyContinue)) { Write-Host "HATA: git bulunamadi." -ForegroundColor Red; exit 1 }
 
-# .env oku
-$envVars = @{}
-Get-Content $envPath | ForEach-Object {
-    $line = $_.Trim()
-    if ($line -and -not $line.StartsWith("#") -and $line -contains "=") {
-        $parts = $line -split "=", 2
-        $envVars[$parts[0].Trim()] = $parts[1].Trim()
-    }
-}
-
-function Ask-AndSave {
-    param($key, $prompt, $default = "")
-    $current = $envVars[$key]
-    if ([string]::IsNullOrWhiteSpace($current)) {
-        if ($default) {
-            $input = $default
-            Write-Host "$key bos, varsayilan kullaniliyor: $input" -ForegroundColor Yellow
-        } else {
-            Write-Host "$prompt" -ForegroundColor White
-            $input = Read-Host
-        }
-        $envVars[$key] = $input
-        $content = Get-Content $envPath
-        $found = $false
-        $updated = $content | ForEach-Object {
-            if ($_ -match "^$key=") { $found = $true; "$key=$input" }
-            else { $_ }
-        }
-        if (-not $found) { $updated += "$key=$input" }
-        Set-Content $envPath $updated -Encoding UTF8
-        Write-Host "$key kaydedildi." -ForegroundColor Green
-        return $input
-    } else {
-        Write-Host "$key mevcut: $current" -ForegroundColor Green
-        return $current
-    }
-}
-
-# 2. Chatterbox src yolu
-Write-Host "--- Chatterbox Kurulum Yolu ---" -ForegroundColor Cyan
-$chatterboxSrc = Ask-AndSave "CHATTERBOX_SRC" `
-    "Chatterbox src klasoru" `
-    "C:\AI\chatterbox\src"
-
-if (-not (Test-Path $chatterboxSrc)) {
-    Write-Host "WARN: $chatterboxSrc bulunamadi." -ForegroundColor Yellow
-}
-
-# 3. Python venv yolu
+# Python 3.11 (py launcher)
 Write-Host ""
-Write-Host "--- Python Venv ---" -ForegroundColor Cyan
-$pythonExe = Ask-AndSave "PYTHON_VENV" `
-    "Python exe yolu (venv icindeki)" `
-    "C:\AI\chatterbox\venv\Scripts\python.exe"
-
-if (-not (Test-Path $pythonExe)) {
-    Write-Host "WARN: $pythonExe bulunamadi." -ForegroundColor Yellow
+Write-Host "--- Python 3.11 Tespiti ---" -ForegroundColor Cyan
+$py311 = $false
+try { $v = & py -3.11 --version 2>&1; if ($LASTEXITCODE -eq 0) { $py311 = $true; Write-Host "Bulundu: $v" -ForegroundColor Green } } catch {}
+if (-not $py311) {
+    Write-Host "HATA: Python 3.11 bulunamadi (py -3.11). python.org/downloads'tan kurun." -ForegroundColor Red; exit 1
 }
 
-# 4. CUDA kontrol
-Write-Host ""
-Write-Host "--- CUDA Kontrol ---" -ForegroundColor Cyan
-if (Test-Path $pythonExe) {
-    try {
-        $cudaCheck = & $pythonExe -c "import torch; print('CUDA:', torch.cuda.is_available())" 2>&1
-        Write-Host $cudaCheck
-    } catch {
-        Write-Host "CUDA kontrolu yapılamadı." -ForegroundColor Yellow
-    }
+# 1. venv
+$venvDir = Join-Path $repoRoot "venv"
+$venvPy  = Join-Path $venvDir "Scripts\python.exe"
+if (-not (Test-Path $venvPy)) {
+    Write-Host "venv olusturuluyor: $venvDir" -ForegroundColor Yellow
+    & py -3.11 -m venv $venvDir
+    if ($LASTEXITCODE -ne 0) { Write-Host "HATA: venv olusturulamadi." -ForegroundColor Red; exit 1 }
+} else { Write-Host "venv mevcut." -ForegroundColor Green }
+
+function Pip { param([string[]]$a) & $venvPy -m pip @a; if ($LASTEXITCODE -ne 0) { throw "pip $($a -join ' ') basarisiz" } }
+
+# 2. pip toolchain
+Write-Host ""; Write-Host "--- pip/setuptools/wheel ---" -ForegroundColor Cyan
+Pip @("install","--upgrade","pip","setuptools","wheel")
+
+# 3. numpy FIRST (pkuseg build bagimliligi)
+Write-Host ""; Write-Host "--- numpy ---" -ForegroundColor Cyan
+Pip @("install","numpy")
+
+# 4. torch + torchaudio (cu121)
+Write-Host ""; Write-Host "--- torch + torchaudio (cu121) ---" -ForegroundColor Cyan
+Pip @("install","torch","torchaudio","--index-url","https://download.pytorch.org/whl/cu121")
+
+# 5. clone chatterbox (resemble-ai)
+Write-Host ""; Write-Host "--- Chatterbox klon ---" -ForegroundColor Cyan
+$cbDir = Join-Path $repoRoot "chatterbox"
+if (-not (Test-Path (Join-Path $cbDir ".git"))) {
+    & git clone https://github.com/resemble-ai/chatterbox.git $cbDir
+    if ($LASTEXITCODE -ne 0) { Write-Host "HATA: clone basarisiz." -ForegroundColor Red; exit 1 }
+} else { Write-Host "chatterbox/ mevcut, klon atlandi." -ForegroundColor Green }
+
+# 6. editable install (torch'u pyproject pinine gore degistirebilir)
+Write-Host ""; Write-Host "--- Chatterbox editable install ---" -ForegroundColor Cyan
+Pip @("install","-e",$cbDir)
+
+# 7. CUDA dogrulama / torch reconcile
+Write-Host ""; Write-Host "--- CUDA dogrulama ---" -ForegroundColor Cyan
+$cuda = (& $venvPy -c "import torch; print(torch.cuda.is_available())" 2>&1)
+Write-Host "torch.cuda.is_available() = $cuda"
+if ("$cuda".Trim() -ne "True") {
+    Write-Host "CUDA yok -> cu121 force-reinstall..." -ForegroundColor Yellow
+    Pip @("install","--force-reinstall","torch","torchaudio","--index-url","https://download.pytorch.org/whl/cu121")
+    $cuda = (& $venvPy -c "import torch; print(torch.cuda.is_available())" 2>&1)
+    Write-Host "Tekrar: torch.cuda.is_available() = $cuda"
 }
 
-# 5. Chatterbox import kontrol
-Write-Host ""
-Write-Host "--- Chatterbox Import Kontrol ---" -ForegroundColor Cyan
-if ((Test-Path $pythonExe) -and (Test-Path $chatterboxSrc)) {
-    $pythonCmd = "import sys; sys.path.insert(0, r'$chatterboxSrc'); " +
-                 "try: from chatterbox.mtl_tts import ChatterboxMultilingualTTS; print('Chatterbox import: OK') " +
-                 "except Exception as e: print(f'Chatterbox import HATA: {e}')"
-    $importCheck = & $pythonExe -c $pythonCmd 2>&1
-    Write-Host $importCheck
+# 8. .env yazimi (absolute, makineye ozgu)
+Write-Host ""; Write-Host "--- .env yazimi ---" -ForegroundColor Cyan
+$cbSrc = Join-Path $cbDir "src"
+function Set-EnvVar {
+    param($key, $value)
+    $content = Get-Content $envPath
+    $found = $false
+    $updated = $content | ForEach-Object { if ($_ -match "^$key=") { $found = $true; "$key=$value" } else { $_ } }
+    if (-not $found) { $updated += "$key=$value" }
+    Set-Content $envPath $updated -Encoding UTF8
+    Write-Host "$key=$value" -ForegroundColor Green
 }
+Set-EnvVar "CHATTERBOX_SRC" $cbSrc
+Set-EnvVar "PYTHON_VENV" $venvPy
 
-# 6. Sanity test
-Write-Host ""
-Write-Host "--- Sanity Test ---" -ForegroundColor Cyan
-if (Test-Path $pythonExe) {
-    Write-Host "Sanity test calistirilsin mi? (E/H) [H]"
-    $runTest = "H"
-    if ($runTest -eq "E" -or $runTest -eq "e") {
-        $scriptPath = Join-Path $repoRoot "scripts\sanity_test.py"
-        & $pythonExe $scriptPath
-    } else {
-        Write-Host "Sanity test atlanıyor." -ForegroundColor Gray
-    }
-}
+# 9. import dogrulama
+Write-Host ""; Write-Host "--- Chatterbox import dogrulama ---" -ForegroundColor Cyan
+$imp = (& $venvPy -c "import sys; sys.path.insert(0, r'$cbSrc'); from chatterbox.mtl_tts import ChatterboxMultilingualTTS; print('Chatterbox import: OK')" 2>&1)
+Write-Host $imp
 
-# 7. Ozet
 Write-Host ""
 Write-Host "=== Python Kurulum Tamamlandi ===" -ForegroundColor Cyan
-Write-Host ""
-Write-Host "Calistirmak icin (repo kokunden):"
-Write-Host "  $pythonExe scripts\chunk_text.py [txt] [slug]"
-Write-Host "  $pythonExe scripts\render_chunks.py [slug]"
-Write-Host "  $pythonExe scripts\merge_audio.py [slug]"
-Write-Host ""
+Write-Host "Model agirliklari ilk gercek render'da indirilir (~GB)."
