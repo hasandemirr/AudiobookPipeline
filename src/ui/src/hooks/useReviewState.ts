@@ -29,6 +29,12 @@ export function useReviewState(slug: string | undefined) {
 
   const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
+  useEffect(() => {
+    return () => {
+      if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current)
+    }
+  }, [])
+
   // Manifest
   const { data: manifest, isLoading: manifestLoading } = useQuery({
     queryKey: ['book', slug],
@@ -231,7 +237,7 @@ export function useReviewState(slug: string | undefined) {
       setRightPages(prev => {
         const updated = prev.map(page => {
           const nonEmpty = page.lines.filter(
-            l => !l.deleted && l.text.trim() !== ''
+            l => !l.deleted && !l.mergeDeleted && l.text.trim() !== ''
           )
 
           return {
@@ -299,7 +305,7 @@ export function useReviewState(slug: string | undefined) {
       const ids = new Set<string>()
       rightPages.forEach(page => {
         const nonEmpty = page.lines.filter(
-          l => !l.deleted && l.text.trim() !== '')
+          l => !l.deleted && !l.mergeDeleted && l.text.trim() !== '')
         page.lines.forEach(line => {
           if (line.deleted) return
           const trimmed = line.text.trim()

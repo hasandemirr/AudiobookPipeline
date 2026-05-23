@@ -57,8 +57,8 @@ akışındaki kritik bug'ları gidermek için yapıldı.
 - SIGTERM → 5sn bekle → SIGKILL
 - `config/{id}.pid` dosyası yönetimi
 - Başlangıçta port 5001 orphan tespiti
-- **Karar bekleyen:** Şu an FastAPI servisi yok. Bu sprint Faz 1'den
-  sonraya ertelenebilir veya iskelet olarak şimdi kurulabilir. **Tartışılacak.**
+- **Kısmen yapıldı (dev-orchestration):** `npm run dev` `--kill-others` + `start.ps1` çıkışta `taskkill /T /F` + 5000/5173 orphan port süpürmesi. Ctrl+C sonrası orphan kalmıyor.
+- **Kalan kapsam:** Gerçek servis process yönetimi (FastAPI/Ollama) — PID dosyası, SIGTERM→SIGKILL, başlangıçta orphan tespiti. Faz 1.2 sonrasına ertelendi (yöneteceği process orada doğuyor).
 
 ### Sprint 0.5 — setup.bat + start.bat `✅`
 **Neden:** Yeni makinede `git clone` + `setup.bat` = çalışır sistem.
@@ -118,8 +118,8 @@ akışındaki kritik bug'ları gidermek için yapıldı.
 
 **Faz 3 notları:**
 - Sprint 3.1 için Prompt 15 (CleanupPanel accordion) hazır taslak mevcut.
-- B1 (autoSaveTimer cleanup) Sprint 3.1'de ele alınabilir.
-- B3 (pagesToContent merge bake) Sprint 3.1 öncesi netleştirilmeli.
+- ✅ KAPANDI (B3 ile birlikte erken yapıldı).
+- ✅ KAPANDI (idempotent merge; detay borç tablosunda).
 
 ---
 
@@ -151,9 +151,9 @@ akışındaki kritik bug'ları gidermek için yapıldı.
 
 | # | Sorun | Öncelik | Hedef Sprint |
 |---|-------|---------|--------------|
-| **B1** | `autoSaveTimer` unmount'ta temizlenmiyor (useReviewState) | Orta | 3.1 |
+| **B1** | `autoSaveTimer` unmount cleanup — ✅ KAPANDI (B3 ile birlikte erken; unmount useEffect) | — | Kapandı |
 | **B2** | SignalR WebSocket proxy ikinci makinede kopuyordu — ✅ KAPANDI (0.5: tek makinede tekrarlanamadı, ikinci makine kaldırıldı) | — | Kapandı |
-| **B3** | `pagesToContent` merge sonucunu dosyaya yazıyor — `originalText` + `mergeDeleted` flag ile çözülmeli | Yüksek | 3.1 öncesi |
+| **B3** | `pagesToContent` merge bake — ✅ KAPANDI (`mergeDeleted` flag + `pagesToContent` `originalText` yazıyor → idempotent; eski baked reviewed dosyaları Reset gerektirir) | — | Kapandı |
 | **B4** | `Program.cs` (TextProcessor) hâlâ standalone CLI — API ile çakışan extract yolu, ileride retire | Düşük | 1.4 |
 | **B5** | `pip install` (ör. requirements.txt güncellemesi) chatterbox bağımlılık ağacını yeniden çözüp CPU torch'u geri getirebilir — 0.5'te reconcile guard yakaladı; Faz 1+ kurulum adımları cu121 reconcile desenini korumalı | Orta | 1.x |
 
@@ -170,7 +170,7 @@ Faz 0 (0.4, 0.5 kaldı)
                           └─► Faz 5 (Ollama)
 
 Bağımsız / paralel:
-  Sprint 3.1 (cleanup accordion) — B1, B3 ile birlikte yapılabilir
+  Sprint 3.1 (cleanup accordion)
   Sprint 0.5 (setup.bat) — ✅
 ```
 
@@ -201,9 +201,9 @@ Her sprint sonunda:
 
 ## Sıradaki Adım
 
-**Sprint 0.4 (Zombie Process Cleanup)** — ancak önce karar:
-FastAPI servisi henüz yok. 0.4'ü şimdi iskelet olarak mı kuralım, yoksa
-Faz 1'den (FastAPI ayağa kalktıktan) sonraya mı erteleyelim? Tartışılacak.
-
-Alternatif: **Sprint 0.5 (setup.bat)** önce yapılabilir — bağımsız ve
-yeni makine kurulumunu kolaylaştırır.
+**Sprint 1.1 — BaseTTSEngine (ABC) + ChatterboxEngine adapter + registry.**
+Faz 0 tamam (0.1–0.3, 0.5 ✅; 0.4 Faz 1.2 sonrasına ertelendi). B1/B3 ve
+dev-orchestration teardown kapatıldı. Chatterbox kurulu (0.5b) → TTS servis
+mimarisine geçiş açık. Ana tartışma: engine ABC arayüz tasarımı
+(`load`/`unload`/`synthesize`/`health` imzaları + adapter'ın
+`ChatterboxMultilingualTTS`'i sarması).

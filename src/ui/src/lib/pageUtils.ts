@@ -13,6 +13,7 @@ export interface LineItem {
   suspicious: boolean
   mergeType?: 'target' | 'source'
   mergedWith?: string
+  mergeDeleted?: boolean
   previewing?: boolean
 }
 
@@ -135,7 +136,7 @@ export function pagesToContent(pages: PageBlock[]): string {
     .map(p => {
       const text = p.lines
         .filter(l => !l.deleted)
-        .map(l => l.text)
+        .map(l => l.originalText)
         .join('\n')
         .trim()
       return `${PAGE_MARKER}${p.pageNumber} ===\n${text}`
@@ -195,7 +196,7 @@ export function mergeCrossPageHyphens(
     // Find last visible non-empty line of current page
     const lastLineIndex = [...currentPage.lines]
       .reverse()
-      .findIndex(l => !l.deleted && l.text.trim() !== '')
+      .findIndex(l => !l.deleted && !l.mergeDeleted && l.text.trim() !== '')
     if (lastLineIndex === -1) continue
 
     const realLastIndex =
@@ -207,7 +208,7 @@ export function mergeCrossPageHyphens(
 
     // Find first visible non-empty line of next page
     const firstLineIndex = nextPage.lines.findIndex(
-      l => !l.deleted && !l.suspicious && l.text.trim() !== ''
+      l => !l.deleted && !l.suspicious && !l.mergeDeleted && l.text.trim() !== ''
     )
     if (firstLineIndex === -1) continue
 
@@ -252,7 +253,7 @@ export function mergeCrossPageHyphens(
       // Whole line was the continuation — mark deleted
       nextPage.lines[firstLineIndex] = {
         ...firstLine,
-        deleted: true,
+        mergeDeleted: true,
         mergeType: 'source',
         mergedWith: lastLine.id,
       }

@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "dev": "concurrently \"npm run api\" \"npm run ui\"",
+    "dev": "concurrently --kill-others \"npm run api\" \"npm run ui\"",
     "api": "dotnet run --project src/Api/AudiobookPipeline.Api/AudiobookPipeline.Api.csproj",
     "ui": "cd src/ui && npm run dev",
     "kill-api": "powershell -Command \"Get-NetTCPConnection -LocalPort 5000 -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }\""

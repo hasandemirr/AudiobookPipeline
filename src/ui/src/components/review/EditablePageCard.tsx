@@ -46,7 +46,7 @@ export function EditablePage({
   const deletedCount = page.lines.filter(l => l.deleted).length
   const allDeleted = page.lines
     .filter(l => l.text.trim() !== '')
-    .every(l => l.deleted)
+    .every(l => l.deleted || l.mergeDeleted)
 
   return (
     <div
@@ -108,7 +108,7 @@ export function EditablePage({
                 group flex items-start gap-2 px-2 py-0.5
                 rounded cursor-pointer text-xs font-mono
                 leading-relaxed transition-colors
-                ${line.deleted && line.mergeType === 'source'
+                ${line.mergeDeleted
                   ? 'text-muted-foreground/30 line-through bg-blue-500/10'
                   : line.deleted
                     ? 'line-through text-muted-foreground/40 bg-destructive/10'
@@ -133,7 +133,7 @@ export function EditablePage({
                   ↩
                 </span>
               )}
-              {line.mergeType === 'source' && !line.deleted && (
+              {line.mergeType === 'source' && !line.deleted && !line.mergeDeleted && (
                 <span className="shrink-0 text-blue-500
                                  text-xs opacity-70 ml-1"
                   title="Continuation moved to previous page">
