@@ -93,8 +93,8 @@ export default function ReviewPage() {
           />
         </div>
 
-        {selectedId && !sectionLoading &&
-          (sectionData?.detected_patterns?.length ?? 0) > 0 && (
+        {selectedId && !sectionLoading && sectionData &&
+          (sectionData.detected_patterns?.length ?? 0) > 0 && (
             <>
               {/* Drag handle */}
               <div

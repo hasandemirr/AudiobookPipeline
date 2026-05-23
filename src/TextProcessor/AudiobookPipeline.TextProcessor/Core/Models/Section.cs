@@ -9,5 +9,5 @@ public class Section
     public string Status { get; set; } = "extracted";
     public bool Narrate { get; set; } = true;
     public string TxtPath { get; set; } = string.Empty;
-    public string ReviewedPath { get; set; } = string.Empty;
+    public string? ReviewedPath { get; set; }
 }
