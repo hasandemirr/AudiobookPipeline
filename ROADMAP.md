@@ -102,7 +102,7 @@ Sonuç: `.NET` build 0 warning / 0 error, UI `tsc` + `vite build` temiz, Python 
 
 - **1.2a — Çekirdek servis**
   - **1.2a-i** `✅` — `requirements.txt` (torch'suz: fastapi, uvicorn[standard], nvidia-ml-py) + `setup_python.ps1`'e `-r` adımı + cu121 reconcile guard. **B5'i kapattı, temiz venv'de doğrulandı.**
-  - **1.2a-ii** `⬜` — `src/tts/app.py`: FastAPI app, lazy singleton engine, endpoint'ler: `/health` (pynvml VRAM), `/engines`, `/engines/load`, `/engines/unload`, `/render` (ham wav bytes döner).
+  - **1.2a-ii** `✅` — `src/tts/app.py`: FastAPI app, lazy singleton engine, endpoint'ler: `/health` (pynvml VRAM), `/engines`, `/engines/load`, `/engines/unload`, `/render` (ham wav bytes). Hata kodları doğrulandı: yüklü değilken render 409, text>300 ve geçersiz audio_prompt_path 422. Swagger `/docs` dahili.
 - **1.2b — Ses işleme** `⬜` (ertelendi) — `/voices/process`, `/voices/test` (ffmpeg normalize + noisereduce + 16kHz). 1.2a şişmesin diye ayrıldı.
 
 **1.2 tasarım kararları (kilitli):**
@@ -247,9 +247,7 @@ Her sprint sonunda:
 
 ## Sıradaki Adım
 
-**Sprint 1.2a-ii — `src/tts/app.py` (FastAPI TTS servisi).**
-1.1 ✅, 1.2a-i ✅ (kurulum altyapısı temiz venv'de doğrulandı, B5 kapandı).
-Tasarım kararları kilitli: lazy singleton engine (startup'ta yüklemez),
-5 endpoint (`/health` pynvml VRAM, `/engines`, `/engines/load`,
-`/engines/unload`, `/render` ham wav bytes), tek-engine, servis otomatik
-kalkmaz. Prompt öncesi güncel repomix yüklenir.
+**Sprint 1.3 — .NET → TTS Proxy.**
+1.1 ✅, 1.2a (✅: a-i kurulum + a-ii FastAPI servisi, tüm endpoint/hata kodları doğrulandı). 1.2b (ses işleme) ertelendi.
+Sıradaki: .NET API'ye `TtsEndpoints` (+ ileride `VoiceEndpoints`), `IHttpClientFactory` ile 5001'e proxy; servis kapalıysa 503. UI yalnızca .NET'i görür (tek giriş noktası).
+Prompt öncesi güncel repomix yüklenir; .NET tarafında Swagger durumu kontrol edilir.
