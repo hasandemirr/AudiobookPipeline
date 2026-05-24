@@ -1,7 +1,5 @@
 $ErrorActionPreference = "Stop"
 $repoRoot = $PSScriptRoot
-$env:PYTHONWARNINGS = "ignore"
-
 
 Write-Host ""
 Write-Host "=== AudiobookPipeline Python/TTS Kurulum ===" -ForegroundColor Cyan
@@ -13,13 +11,10 @@ if (-not (Test-Path $envPath)) { Write-Host "HATA: .env yok. Once .\setup.ps1 ca
 if (-not (Get-Command git -ErrorAction SilentlyContinue)) { Write-Host "HATA: git bulunamadi." -ForegroundColor Red; exit 1 }
 
 # Python 3.11 (py launcher)
-Write-Host ""
-Write-Host "--- Python 3.11 Tespiti ---" -ForegroundColor Cyan
+Write-Host ""; Write-Host "--- Python 3.11 Tespiti ---" -ForegroundColor Cyan
 $py311 = $false
 try { $v = & py -3.11 --version 2>&1; if ($LASTEXITCODE -eq 0) { $py311 = $true; Write-Host "Bulundu: $v" -ForegroundColor Green } } catch {}
-if (-not $py311) {
-    Write-Host "HATA: Python 3.11 bulunamadi (py -3.11). python.org/downloads'tan kurun." -ForegroundColor Red; exit 1
-}
+if (-not $py311) { Write-Host "HATA: Python 3.11 bulunamadi (py -3.11). python.org/downloads'tan kurun." -ForegroundColor Red; exit 1 }
 
 # 1. venv
 $venvDir = Join-Path $repoRoot "venv"
@@ -32,6 +27,12 @@ if (-not (Test-Path $venvPy)) {
 
 function Pip { param([string[]]$a) & $venvPy -m pip @a; if ($LASTEXITCODE -ne 0) { throw "pip $($a -join ' ') basarisiz" } }
 
+# Robust CUDA check: -W ignore + 2>$null so benign warnings never abort under Stop.
+function Test-Cuda {
+    $r = & $venvPy -W ignore -c "import torch; print(torch.cuda.is_available())" 2>$null
+    return ("$r".Trim() -eq "True")
+}
+
 # 2. pip toolchain
 Write-Host ""; Write-Host "--- pip/setuptools/wheel ---" -ForegroundColor Cyan
 Pip @("install","--upgrade","pip","setuptools","wheel")
@@ -40,9 +41,9 @@ Pip @("install","--upgrade","pip","setuptools","wheel")
 Write-Host ""; Write-Host "--- numpy ---" -ForegroundColor Cyan
 Pip @("install","numpy")
 
-# 4. torch + torchaudio (cu121)
-Write-Host ""; Write-Host "--- torch + torchaudio (cu121) ---" -ForegroundColor Cyan
-Pip @("install","torch","torchaudio","--index-url","https://download.pytorch.org/whl/cu121")
+# 4. torch + torchaudio PINNED to cu121 build (deterministic)
+Write-Host ""; Write-Host "--- torch + torchaudio (2.5.1 cu121) ---" -ForegroundColor Cyan
+Pip @("install","torch==2.5.1","torchaudio==2.5.1","--index-url","https://download.pytorch.org/whl/cu121")
 
 # 5. clone chatterbox (resemble-ai)
 Write-Host ""; Write-Host "--- Chatterbox klon ---" -ForegroundColor Cyan
@@ -52,26 +53,27 @@ if (-not (Test-Path (Join-Path $cbDir ".git"))) {
     if ($LASTEXITCODE -ne 0) { Write-Host "HATA: clone basarisiz." -ForegroundColor Red; exit 1 }
 } else { Write-Host "chatterbox/ mevcut, klon atlandi." -ForegroundColor Green }
 
-# 6. editable install (torch'u pyproject pinine gore degistirebilir)
+# 6. editable install (chatterbox pins torch==2.6.0 -> will replace our cu121 build)
 Write-Host ""; Write-Host "--- Chatterbox editable install ---" -ForegroundColor Cyan
 Pip @("install","-e",$cbDir)
 
-# 6b. service deps (torch'suz; reconcile bunu da kapsar)
+# 6b. service deps (pure-PyPI; torch'suz)
 Write-Host ""; Write-Host "--- Service deps (requirements.txt) ---" -ForegroundColor Cyan
 $reqFile = Join-Path $repoRoot "requirements.txt"
 if (Test-Path $reqFile) { Pip @("install","-r",$reqFile) }
 else { Write-Host "UYARI: requirements.txt yok, atlandi." -ForegroundColor Yellow }
 
-# 7. CUDA dogrulama / torch reconcile (chatterbox -e VE requirements sonrasi)
-Write-Host ""; Write-Host "--- CUDA dogrulama ---" -ForegroundColor Cyan
-$cuda = (& $venvPy -c "import torch; print(torch.cuda.is_available())" 2>$null)
-Write-Host "torch.cuda.is_available() = $cuda"
-if ("$cuda".Trim() -ne "True") {
-    Write-Host "CUDA yok -> cu121 force-reinstall..." -ForegroundColor Yellow
+# 7. RECONCILE: chatterbox/requirements torch'u CPU/2.6.0'a dusurmus olabilir.
+#    cu121 2.5.1'e geri sabitle (chatterbox ==2.6.0 pini kozmetik; runtime uyumlu).
+Write-Host ""; Write-Host "--- CUDA dogrulama / torch reconcile ---" -ForegroundColor Cyan
+if (Test-Cuda) {
+    Write-Host "torch.cuda.is_available() = True" -ForegroundColor Green
+} else {
+    Write-Host "CUDA yok -> torch 2.5.1 cu121'e sabitleniyor..." -ForegroundColor Yellow
     Pip @("uninstall","-y","torch","torchaudio")
-    Pip @("install","torch","torchaudio","--index-url","https://download.pytorch.org/whl/cu121")
-    $cuda = (& $venvPy -c "import torch; print(torch.cuda.is_available())" 2>$null)
-    Write-Host "Tekrar: torch.cuda.is_available() = $cuda"
+    Pip @("install","torch==2.5.1","torchaudio==2.5.1","--index-url","https://download.pytorch.org/whl/cu121")
+    if (Test-Cuda) { Write-Host "Tekrar: torch.cuda.is_available() = True" -ForegroundColor Green }
+    else { Write-Host "HATA: reconcile sonrasi hala CUDA yok." -ForegroundColor Red; exit 1 }
 }
 
 # 8. .env yazimi (absolute, makineye ozgu)
@@ -89,10 +91,11 @@ function Set-EnvVar {
 Set-EnvVar "CHATTERBOX_SRC" $cbSrc
 Set-EnvVar "PYTHON_VENV" $venvPy
 
-# 9. import dogrulama
+# 9. import dogrulama (editable install -> sys.path hilesi YOK)
 Write-Host ""; Write-Host "--- Chatterbox import dogrulama ---" -ForegroundColor Cyan
-$imp = (& $venvPy -c "import sys; sys.path.insert(0, r'$cbSrc'); from chatterbox.mtl_tts import ChatterboxMultilingualTTS; print('Chatterbox import: OK')" 2>$null)
+$imp = & $venvPy -W ignore -c "from chatterbox.mtl_tts import ChatterboxMultilingualTTS; print('Chatterbox import: OK')" 2>$null
 Write-Host $imp
+if ("$imp".Trim() -ne "Chatterbox import: OK") { Write-Host "HATA: chatterbox import dogrulanamadi." -ForegroundColor Red; exit 1 }
 
 Write-Host ""
 Write-Host "=== Python Kurulum Tamamlandi ===" -ForegroundColor Cyan

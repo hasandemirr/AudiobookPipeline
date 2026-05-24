@@ -1,7 +1,7 @@
-# Pure-PyPI service deps. torch/torchaudio are NOT here: they are installed
-# from the cu121 index in setup_python.ps1; listing them here would pull the
-# CPU build from PyPI. numpy is also handled in setup_python.ps1 (numpy-first
-# step) and pinned transitively by chatterbox.
+# Pure-PyPI service deps. torch/torchaudio NOT here (cu121 index, setup_python.ps1).
+# numpy handled in setup_python.ps1 + pinned transitively by chatterbox.
+# nvidia-ml-py (not pynvml): provides the `pynvml` module WITHOUT the deprecation
+# warning that aborts setup_python.ps1's CUDA check under ErrorActionPreference=Stop.
 fastapi
 uvicorn[standard]
-pynvml
+nvidia-ml-py
