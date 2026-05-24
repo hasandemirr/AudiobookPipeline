@@ -1,5 +1,7 @@
 $ErrorActionPreference = "Stop"
 $repoRoot = $PSScriptRoot
+$env:PYTHONWARNINGS = "ignore"
+
 
 Write-Host ""
 Write-Host "=== AudiobookPipeline Python/TTS Kurulum ===" -ForegroundColor Cyan
@@ -54,14 +56,21 @@ if (-not (Test-Path (Join-Path $cbDir ".git"))) {
 Write-Host ""; Write-Host "--- Chatterbox editable install ---" -ForegroundColor Cyan
 Pip @("install","-e",$cbDir)
 
-# 7. CUDA dogrulama / torch reconcile
+# 6b. service deps (torch'suz; reconcile bunu da kapsar)
+Write-Host ""; Write-Host "--- Service deps (requirements.txt) ---" -ForegroundColor Cyan
+$reqFile = Join-Path $repoRoot "requirements.txt"
+if (Test-Path $reqFile) { Pip @("install","-r",$reqFile) }
+else { Write-Host "UYARI: requirements.txt yok, atlandi." -ForegroundColor Yellow }
+
+# 7. CUDA dogrulama / torch reconcile (chatterbox -e VE requirements sonrasi)
 Write-Host ""; Write-Host "--- CUDA dogrulama ---" -ForegroundColor Cyan
-$cuda = (& $venvPy -c "import torch; print(torch.cuda.is_available())" 2>&1)
+$cuda = (& $venvPy -c "import torch; print(torch.cuda.is_available())" 2>$null)
 Write-Host "torch.cuda.is_available() = $cuda"
 if ("$cuda".Trim() -ne "True") {
     Write-Host "CUDA yok -> cu121 force-reinstall..." -ForegroundColor Yellow
-    Pip @("install","--force-reinstall","torch","torchaudio","--index-url","https://download.pytorch.org/whl/cu121")
-    $cuda = (& $venvPy -c "import torch; print(torch.cuda.is_available())" 2>&1)
+    Pip @("uninstall","-y","torch","torchaudio")
+    Pip @("install","torch","torchaudio","--index-url","https://download.pytorch.org/whl/cu121")
+    $cuda = (& $venvPy -c "import torch; print(torch.cuda.is_available())" 2>$null)
     Write-Host "Tekrar: torch.cuda.is_available() = $cuda"
 }
 
@@ -82,7 +91,7 @@ Set-EnvVar "PYTHON_VENV" $venvPy
 
 # 9. import dogrulama
 Write-Host ""; Write-Host "--- Chatterbox import dogrulama ---" -ForegroundColor Cyan
-$imp = (& $venvPy -c "import sys; sys.path.insert(0, r'$cbSrc'); from chatterbox.mtl_tts import ChatterboxMultilingualTTS; print('Chatterbox import: OK')" 2>&1)
+$imp = (& $venvPy -c "import sys; sys.path.insert(0, r'$cbSrc'); from chatterbox.mtl_tts import ChatterboxMultilingualTTS; print('Chatterbox import: OK')" 2>$null)
 Write-Host $imp
 
 Write-Host ""

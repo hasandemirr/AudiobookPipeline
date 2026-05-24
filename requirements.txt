@@ -1,3 +1,7 @@
-﻿torch
-torchaudio
-numpy
+# Pure-PyPI service deps. torch/torchaudio are NOT here: they are installed
+# from the cu121 index in setup_python.ps1; listing them here would pull the
+# CPU build from PyPI. numpy is also handled in setup_python.ps1 (numpy-first
+# step) and pinned transitively by chatterbox.
+fastapi
+uvicorn[standard]
+pynvml
