@@ -43,6 +43,24 @@ public class ManifestService
         File.WriteAllText(manifestPath, json, System.Text.Encoding.UTF8);
     }
 
+    public List<PageContent> LoadPages(string jsonPath)
+    {
+        if (!File.Exists(jsonPath))
+            return new List<PageContent>();
+        var json = File.ReadAllText(jsonPath, System.Text.Encoding.UTF8);
+        return JsonSerializer.Deserialize<List<PageContent>>(json, Options)
+               ?? new List<PageContent>();
+    }
+
+    public void SavePages(string jsonPath, List<PageContent> pages)
+    {
+        var dir = Path.GetDirectoryName(jsonPath);
+        if (!string.IsNullOrEmpty(dir))
+            Directory.CreateDirectory(dir);
+        var json = JsonSerializer.Serialize(pages, Options);
+        File.WriteAllText(jsonPath, json, System.Text.Encoding.UTF8);
+    }
+
     public async Task<T> UpdateAsync<T>(
         string manifestPath,
         Func<BookManifest, Task<T>> update)

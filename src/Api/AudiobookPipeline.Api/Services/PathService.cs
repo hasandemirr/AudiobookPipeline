@@ -69,6 +69,16 @@ public class PathService
     public string ReviewedDir(string slug) =>
         Path.Combine(BookDir(slug), "reviewed");
 
+    // Structural page JSON paths (PageContent[]). Derived from the section's
+    // .txt pointer filename, with a .json extension.
+    public string SectionJsonPath(string slug, string txtFileName) =>
+        Path.Combine(SectionsDir(slug),
+            Path.ChangeExtension(txtFileName, ".json"));
+
+    public string ReviewedJsonPath(string slug, string txtFileName) =>
+        Path.Combine(ReviewedDir(slug),
+            Path.ChangeExtension(txtFileName, ".json"));
+
     public string ExportPath(string slug) =>
         Path.Combine(OutputDir, $"{slug}_export.txt");
 

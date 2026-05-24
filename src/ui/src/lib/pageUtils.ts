@@ -131,18 +131,7 @@ export function parsePages(
     .filter(p => p.pageNumber > 0)
 }
 
-export function pagesToContent(pages: PageBlock[]): string {
-  return pages
-    .map(p => {
-      const text = p.lines
-        .filter(l => !l.deleted)
-        .map(l => l.originalText)
-        .join('\n')
-        .trim()
-      return `${PAGE_MARKER}${p.pageNumber} ===\n${text}`
-    })
-    .join('\n\n')
-}
+
 
 export function formatRelativeTime(date: Date): string {
   const seconds = Math.floor(
@@ -268,4 +257,45 @@ export function mergeCrossPageHyphens(
   }
 
   return result
+}
+
+export interface PageContentInput {
+  pageNumber: number
+  text: string
+}
+
+// Structural save payload: non-deleted lines per page -> {pageNumber, text}.
+// Mirrors pagesToContent's text logic but emits structured pages, not a marker string.
+export function pagesToContentList(pages: PageBlock[]): PageContentInput[] {
+  return pages.map(p => ({
+    pageNumber: p.pageNumber,
+    text: p.lines
+      .filter(l => !l.deleted)
+      .map(l => l.originalText)
+      .join('\n')
+      .trim(),
+  }))
+}
+
+// Build editable PageBlock[] directly from structural pages (page_number/text),
+// replacing marker-string parsing. Mirrors parsePages' line-item + suspicious logic.
+export function pagesToBlocks(
+  pages: { page_number: number; text: string }[],
+  repeatedLines: string[] = []
+): PageBlock[] {
+  return pages.map(p => {
+    const pageNumber = p.page_number
+    const pageText = (p.text ?? '').trim()
+    const lines: LineItem[] = pageText
+      .split('\n')
+      .map((text, i) => ({
+        id: `${pageNumber}-${i}`,
+        text,
+        originalText: text,
+        lineIndex: i,
+        deleted: false,
+        suspicious: isSuspicious(text, repeatedLines),
+      }))
+    return { pageNumber, text: pageText, lines }
+  })
 }

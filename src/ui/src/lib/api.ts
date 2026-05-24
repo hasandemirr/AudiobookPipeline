@@ -57,6 +57,7 @@ export interface Section {
   page_start: number
   page_end: number
   content: string
+  pages: { page_number: number; text: string }[]
   is_reviewed: boolean
   repeated_lines: string[]
   detected_patterns: DetectedPattern[]
@@ -100,13 +101,13 @@ export const api = {
   getSection: (slug: string, id: string) =>
     request<Section>(`${BASE}/books/${slug}/sections/${id}`),
 
-  updateSection: (slug: string, id: string, content: string) =>
+  updateSection: (slug: string, id: string, pages: { pageNumber: number; text: string }[]) =>
     request<SectionUpdateResult>(
       `${BASE}/books/${slug}/sections/${id}`,
       {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content }),
+        body: JSON.stringify({ pages: pages.map(p => ({ page_number: p.pageNumber, text: p.text })) }),
       }
     ),
 

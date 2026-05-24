@@ -4,8 +4,8 @@ import { toast } from 'sonner'
 import { api, ApiError } from '../lib/api'
 import {
   type PageBlock,
-  parsePages,
-  pagesToContent,
+  pagesToBlocks,
+  pagesToContentList,
   deepClonePages,
   mergeCrossPageHyphens,
 } from '../lib/pageUtils'
@@ -55,8 +55,8 @@ export function useReviewState(slug: string | undefined) {
 
     const repeatedLines  = sectionData.repeated_lines  ?? []
 
-    const parsed = parsePages(
-      sectionData.content,
+    const parsed = pagesToBlocks(
+      sectionData.pages,
       repeatedLines
     )
 
@@ -70,7 +70,7 @@ export function useReviewState(slug: string | undefined) {
   // Save
   const saveMutation = useMutation({
     mutationFn: () =>
-      api.updateSection(slug!, selectedId!, pagesToContent(rightPages)),
+      api.updateSection(slug!, selectedId!, pagesToContentList(rightPages)),
     onSuccess: () => {
       toast.success('Saved.')
       setIsDirty(false)
@@ -90,7 +90,7 @@ export function useReviewState(slug: string | undefined) {
     mutationFn: async () => {
       if (isDirty)
         await api.updateSection(
-          slug!, selectedId!, pagesToContent(rightPages))
+          slug!, selectedId!, pagesToContentList(rightPages))
       return api.approveSection(slug!, selectedId!)
     },
     onSuccess: () => {

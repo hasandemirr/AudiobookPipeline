@@ -108,24 +108,29 @@ public class ExtractJob : IJob
             {
                 var entry     = toc[i];
                 var sectionId = $"section_{i + 1:D4}";
-                var fileName  = $"{i + 1:D3}_{Slugify(entry.Title)}.txt";
-                var txtPath   = Path.Combine(sectionsDir, fileName);
+                var fileName  = $"{i + 1:D3}_{Slugify(entry.Title)}.json";
+                var jsonPath  = Path.Combine(sectionsDir, fileName);
 
-                var text = string.Join("\n\n",
-                    allPages
-                        .Where(p => p.PageNumber >= entry.PageStart
-                                 && p.PageNumber <= entry.PageEnd)
-                        .Select(p =>
+                // Structural page output: per-page cleanup + OCR fix (context-free,
+                // identical result), stored as PageContent[] JSON (no string markers).
+                var pages = allPages
+                    .Where(p => p.PageNumber >= entry.PageStart
+                             && p.PageNumber <= entry.PageEnd)
+                    .Select(p =>
+                    {
+                        var t = _extractor.RemovePageNumbers(p.Text);
+                        t = _extractor.StripEmbeddedPageNumbers(t);
+                        t = _extractor.JoinBrokenLines(t);
+                        t = _ocrFix.Apply(t);
+                        return new PageContent
                         {
-                            var t = _extractor.RemovePageNumbers(p.Text);
-                            t = _extractor.StripEmbeddedPageNumbers(t);
-                            t = _extractor.JoinBrokenLines(t);
-                            return _extractor.FormatPageWithMarker(
-                                p.PageNumber, t);
-                        }));
+                            PageNumber = p.PageNumber,
+                            Text = t
+                        };
+                    })
+                    .ToList();
 
-                File.WriteAllText(txtPath, _ocrFix.Apply(text),
-                    System.Text.Encoding.UTF8);
+                _svc.SavePages(jsonPath, pages);
 
                 manifest.Sections.Add(new Section
                 {
@@ -135,7 +140,7 @@ public class ExtractJob : IJob
                     PageEnd   = entry.PageEnd,
                     Status    = "extracted",
                     Narrate   = entry.Narrate,
-                    TxtPath   = _paths.ToRelative(txtPath)
+                    TxtPath   = _paths.ToRelative(jsonPath)
                 });
 
                 var pct = 10 + (int)((i + 1.0) / toc.Count * 85);
