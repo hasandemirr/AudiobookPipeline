@@ -12,7 +12,7 @@ AudiobookPipeline, bir PDF kitabı baştan sona sese dönüştüren tek yönlü 
 boru hattıdır. Akış şu adımlardan oluşur:
 
 ```
-PDF → Extract → Review/Cleanup → Approve → chunk_text → render → merge → output/{slug}.wav + .srt
+PDF → Extract → Review/Cleanup → Approve → chunk → TTS servisi (render) → merge → output/{slug}.(mp3|wav) + .srt
 ```
 
 Son kullanıcı şunları yapar:
@@ -124,9 +124,10 @@ voices/
   processed/             ← normalize edilmiş ses
 ```
 
-> **Not:** Çıktı şu an flat yazılır — `output/{slug}.wav` (merge_audio.py)
-> ve `output/{slug}_export.txt` (PathService.ExportPath). Yukarıdaki
-> per-slug `output/{slug}/` klasör yapısı hedeftir (Faz 3.5/4).
+> **Not:** Mevcut export çıktısı flat — `output/{slug}_export.txt`
+> (PathService.ExportPath). Render çıktısı (mp3/wav + .srt) ve per-slug
+> `output/{slug}/` klasör yapısı render orkestrasyonu ile gelir (Faz 3.4/3.5/4).
+> Eski standalone render hattı scripts/legacy/ altında arşivlendi.
 
 ### Manifest Şeması
 

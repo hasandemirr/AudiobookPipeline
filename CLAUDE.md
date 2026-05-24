@@ -49,11 +49,16 @@ React UI yalnızca .NET API'yi görür (TEK GİRİŞ NOKTASI). API bileşenleri:
 6. VRAM boşaltma: del model + gc.collect() + torch.cuda.empty_cache().
 7. Test geçmeden sonraki sprint başlamaz.
 
-## Python TTS Scriptleri (legacy pipeline — Faz 1'de FastAPI'ye taşınır)
-- scripts/chunk_text.py    — txt -> chunks + manifest
-- scripts/render_chunks.py — manifest -> WAV (resume destekli)
-- scripts/merge_audio.py   — WAV birleştirme, 300ms sessizlik
-- scripts/sanity_test.py   — tek chunk Chatterbox testi
+## Python TTS (Faz 1: FastAPI servisi)
+- src/tts/app.py           — FastAPI TTS servisi (port 5001): /health, /engines, /engines/load, /engines/unload, /render
+- src/tts/engines/         — BaseTTSEngine (ABC) + ChatterboxEngine adapter
+- src/tts/registry.py      — engine registry (yeni model = 1 satir)
+- scripts/test_tts_engine.py — engine smoke testi (load->synthesize->unload)
+
+## Legacy pipeline (scripts/legacy/ — arsiv, render artik TTS servisi uzerinden)
+- scripts/legacy/chunk_text.py    — txt -> chunks + manifest
+- scripts/legacy/render_chunks.py — manifest -> WAV (resume destekli)
+- scripts/legacy/merge_audio.py   — WAV birlestirme, 300ms sessizlik
 
 Chatterbox API:
   model = ChatterboxMultilingualTTS.from_pretrained(device=DEVICE)

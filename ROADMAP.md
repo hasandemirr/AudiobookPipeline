@@ -95,7 +95,7 @@ Sonuç: `.NET` build 0 warning / 0 error, UI `tsc` + `vite build` temiz, Python 
 | **1.1** | BaseTTSEngine (ABC) + ChatterboxEngine adapter + registry (`src/tts/`, smoke test: load→synthesize→unload, VRAM ~3.2GB→~8MB) | ✅ |
 | **1.2** | FastAPI TTS Servisi (port 5001) | 🔵 |
 | **1.3** | .NET → TTS Proxy (`TtsEndpoints` /api/tts/*, pass-through status+body, 503; Swashbuckle Swagger /swagger koşulsuz açık) | ✅ |
-| **1.4** | render_chunks.py retire (`scripts/legacy/`'e taşı) | ⬜ |
+| **1.4** | Legacy scripts retire: render_chunks/chunk_text/merge_audio → `scripts/legacy/`; sanity_test + test_env×2 silindi; test_tts_engine korundu | ✅ |
 
 ### Sprint 1.2 — FastAPI TTS Servisi `🔵`
 İki alt-sprint olarak bölündü:
@@ -247,7 +247,13 @@ Her sprint sonunda:
 
 ## Sıradaki Adım
 
-**Sprint 1.4 — render_chunks.py retire (B4).**
-1.1 ✅, 1.2a ✅, 1.3 ✅ (proxy + Swagger; uçtan uca .NET→Python render doğrulandı: 200 wav / 409 / 422 pass-through, servis kapalıyken 503). 1.2b (ses işleme) ertelendi.
-Sıradaki: standalone `render_chunks.py` (ve gerekiyorsa TextProcessor CLI Program.cs) `scripts/legacy/`'e taşınır — render yolu artık TTS servisi üzerinden. Faz 1 bununla kapanır.
+**Render Orkestrasyonu (öne çekildi — asıl ürün değeri).**
+Faz 1 kod maddeleri tamam: 1.1 ✅, 1.2a ✅, 1.3 ✅, 1.4 ✅. Ertelenenler: 1.2b (ses işleme), B4 (TextProcessor Exe→Library).
+Sıradaki: bir kitabı uçtan uca seslendirme. Kapsam (3.4+4.1+4.2 birleşimi):
+- Chunk'layıcı: cümle korunarak ≤280 char; uzun cümle virgül/" sınırından bölünür, uzun-chunk UI'da işaretlenir.
+- .NET RenderJob (mevcut BackgroundTaskQueue): chunk'lar SIRALI render (/api/tts/render); başarılıysa sonraki, hata→dur+SignalR bildir; resume (render_state).
+- /render PCM_S16 wav + süre (header) döner; .NET her chunk'ı workspace/{slug}/audio/{id}.wav'a yazar, manifest günceller (render_state, duration_ms, subtitle_start/end_ms).
+- Tüm chunk done → merge → output (ffmpeg ile mp3 vb; UI'dan format seçilebilir) + SRT (chunk süresi = o chunk metninin altyazı süresi).
+- audio_prompt_path opsiyonel (varsayilan ses; referans-ses klonlama 1.2b+3.3'te eklenir).
+Ön-koşul: setup'a ffmpeg kontrolü eklenecek.
 Prompt öncesi güncel repomix yüklenir.
