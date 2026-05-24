@@ -94,7 +94,7 @@ Sonuç: `.NET` build 0 warning / 0 error, UI `tsc` + `vite build` temiz, Python 
 |--------|-----|-------|
 | **1.1** | BaseTTSEngine (ABC) + ChatterboxEngine adapter + registry (`src/tts/`, smoke test: load→synthesize→unload, VRAM ~3.2GB→~8MB) | ✅ |
 | **1.2** | FastAPI TTS Servisi (port 5001) | 🔵 |
-| **1.3** | .NET → TTS Proxy (`TtsEndpoints`, `VoiceEndpoints`, IHttpClientFactory) | ⬜ |
+| **1.3** | .NET → TTS Proxy (`TtsEndpoints` /api/tts/*, pass-through status+body, 503; Swashbuckle Swagger /swagger koşulsuz açık) | ✅ |
 | **1.4** | render_chunks.py retire (`scripts/legacy/`'e taşı) | ⬜ |
 
 ### Sprint 1.2 — FastAPI TTS Servisi `🔵`
@@ -247,7 +247,7 @@ Her sprint sonunda:
 
 ## Sıradaki Adım
 
-**Sprint 1.3 — .NET → TTS Proxy.**
-1.1 ✅, 1.2a (✅: a-i kurulum + a-ii FastAPI servisi, tüm endpoint/hata kodları doğrulandı). 1.2b (ses işleme) ertelendi.
-Sıradaki: .NET API'ye `TtsEndpoints` (+ ileride `VoiceEndpoints`), `IHttpClientFactory` ile 5001'e proxy; servis kapalıysa 503. UI yalnızca .NET'i görür (tek giriş noktası).
-Prompt öncesi güncel repomix yüklenir; .NET tarafında Swagger durumu kontrol edilir.
+**Sprint 1.4 — render_chunks.py retire (B4).**
+1.1 ✅, 1.2a ✅, 1.3 ✅ (proxy + Swagger; uçtan uca .NET→Python render doğrulandı: 200 wav / 409 / 422 pass-through, servis kapalıyken 503). 1.2b (ses işleme) ertelendi.
+Sıradaki: standalone `render_chunks.py` (ve gerekiyorsa TextProcessor CLI Program.cs) `scripts/legacy/`'e taşınır — render yolu artık TTS servisi üzerinden. Faz 1 bununla kapanır.
+Prompt öncesi güncel repomix yüklenir.

@@ -24,11 +24,25 @@ builder.Services.AddCors(options =>
               .AllowCredentials()));
 
 builder.Services.AddSignalR();
+
+// Swagger / OpenAPI (single env: always enabled, no IsDevelopment gate)
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen();
 builder.Services.AddSingleton<PathService>();
 builder.Services.AddSingleton<ManifestService>();
 
 builder.Services.Configure<ExtractConfig>(
     builder.Configuration.GetSection("Extract"));
+
+// Named HttpClient for the Python TTS service (port 5001). Long timeout: render can be slow.
+builder.Services.AddHttpClient("tts", (sp, client) =>
+{
+    var cfg = sp.GetRequiredService<IOptions<TtsConfig>>().Value;
+    client.BaseAddress = new Uri(cfg.BaseUrl);
+    client.Timeout = TimeSpan.FromSeconds(300);
+});
+builder.Services.Configure<TtsConfig>(
+    builder.Configuration.GetSection("Tts"));
 
 builder.Services.AddScoped<AudiobookPipeline.TextProcessor.Core.Services.TocParserService>();
 builder.Services.AddScoped<AudiobookPipeline.TextProcessor.Core.Services.PdfExtractService>();
@@ -64,10 +78,15 @@ var app = builder.Build();
 
 app.UseCors();
 
+// Always on (single env). Browse all endpoints at /swagger.
+app.UseSwagger();
+app.UseSwaggerUI();
+
 BookEndpoints.Map(app);
 SectionEndpoints.Map(app);
 ExtractEndpoints.Map(app);
 ExportEndpoints.Map(app);
+TtsEndpoints.Map(app);
 
 app.MapHub<ProgressHub>("/hubs/progress");
 
