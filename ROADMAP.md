@@ -38,6 +38,20 @@ akışındaki kritik bug'ları gidermek için yapıldı.
 
 ---
 
+## Build Hijyeni (Faz 1 sırasında, ad-hoc)
+
+Derleme/tip hata listesini sıfırlamak için yapılan izole düzeltmeler.
+
+| # | İş | Durum |
+|---|-----|-------|
+| H-1 | TS5101 — `tsconfig.json` `baseUrl` kaldırıldı (`paths` göreli; TS 6.x deprecation) | ✅ |
+| H-2 | TS18048 — `ReviewPage.tsx` `sectionData` narrowing (`?.` susturma yerine açık guard) | ✅ |
+| H-3 | CS8625 — `Section.ReviewedPath` `string?` yapıldı (Reset akışı null atıyor) | ✅ |
+
+Sonuç: `.NET` build 0 warning / 0 error, UI `tsc` + `vite build` temiz, Python import temiz.
+
+---
+
 ## FAZ 0 — Teknik Borç ve Kurulum Altyapısı
 
 > **Neden:** Production seviyesinde bug'lar. Tüm sonraki fazlar bu altyapı
@@ -48,7 +62,7 @@ akışındaki kritik bug'ları gidermek için yapıldı.
 | **0.1** | BackgroundService Queue (`Task.Run` kaldırıldı, `Channel<IJob>` + `QueuedHostedService` + `ExtractJob`) | ✅ |
 | **0.2** | ManifestService Distributed Lock (`SemaphoreSlim` per-slug, `UpdateAsync`) | ✅ |
 | **0.3** | Dependency Injection Cleanup (`ExtractConfig`, servisler `AddScoped`, `IServiceProvider` scope) | ✅ |
-| **0.4** | Zombie Process Cleanup (`ApplicationStopping` hook, PID dosyası, orphan tespiti) | ⬜ |
+| **0.4** | Zombie Process Cleanup (`ApplicationStopping` hook, PID dosyası, orphan tespiti) | ⬜ (ertelendi → Faz 1.2 sonrası) |
 | **0.5** | setup.bat + start.bat (full Python installer + cu121 reconcile + .env.example + API build fix + npm install) | ✅ |
 
 ### Sprint 0.4 — Zombie Process Cleanup `⬜`
@@ -63,7 +77,7 @@ akışındaki kritik bug'ları gidermek için yapıldı.
 ### Sprint 0.5 — setup.bat + start.bat `✅`
 **Neden:** Yeni makinede `git clone` + `setup.bat` = çalışır sistem.
 - `.env.example` (versiyonlu şablon) + `setup.ps1`: .env türetme, klasör yapısı, API csproj build (TextProcessor değil), npm install (root + src/ui)
-- `setup_python.ps1`: py -3.11 tespit (auto-install YOK) → repo/venv → resemble-ai/chatterbox klon → numpy → torch cu121 → `pip install -e chatterbox` → cu121 torch reconcile guard → .env'e absolute CHATTERBOX_SRC/PYTHON_VENV
+- `setup_python.ps1`: py -3.11 tespit (auto-install YOK) → repo/venv → resemble-ai/chatterbox klon → numpy → torch cu121 (pinli 2.5.1) → `pip install -e chatterbox` → `requirements.txt` → cu121 torch reconcile guard → .env'e absolute CHATTERBOX_SRC/PYTHON_VENV. **Temiz venv'de uçtan uca doğrulandı.**
 - `.gitignore`: `venv/`, `chatterbox/`
 - `setup.bat` / `start.bat` ince launcher; `start.ps1` health-poll + `npm run dev` + tarayıcı aç
 - **B2 (SignalR proxy):** metha tek makinede tekrarlanamadı, ikinci makine kaldırıldı → kapatıldı.
@@ -79,14 +93,30 @@ akışındaki kritik bug'ları gidermek için yapıldı.
 | Sprint | İş | Durum |
 |--------|-----|-------|
 | **1.1** | BaseTTSEngine (ABC) + ChatterboxEngine adapter + registry (`src/tts/`, smoke test: load→synthesize→unload, VRAM ~3.2GB→~8MB) | ✅ |
-| **1.2** | FastAPI TTS Servisi (port 5001, /render, /engines, /voices, /health) | ⬜ |
+| **1.2** | FastAPI TTS Servisi (port 5001) | 🔵 |
 | **1.3** | .NET → TTS Proxy (`TtsEndpoints`, `VoiceEndpoints`, IHttpClientFactory) | ⬜ |
 | **1.4** | render_chunks.py retire (`scripts/legacy/`'e taşı) | ⬜ |
 
+### Sprint 1.2 — FastAPI TTS Servisi `🔵`
+İki alt-sprint olarak bölündü:
+
+- **1.2a — Çekirdek servis**
+  - **1.2a-i** `✅` — `requirements.txt` (torch'suz: fastapi, uvicorn[standard], nvidia-ml-py) + `setup_python.ps1`'e `-r` adımı + cu121 reconcile guard. **B5'i kapattı, temiz venv'de doğrulandı.**
+  - **1.2a-ii** `⬜` — `src/tts/app.py`: FastAPI app, lazy singleton engine, endpoint'ler: `/health` (pynvml VRAM), `/engines`, `/engines/load`, `/engines/unload`, `/render` (ham wav bytes döner).
+- **1.2b — Ses işleme** `⬜` (ertelendi) — `/voices/process`, `/voices/test` (ffmpeg normalize + noisereduce + 16kHz). 1.2a şişmesin diye ayrıldı.
+
+**1.2 tasarım kararları (kilitli):**
+- **Servis otomatik kalkmaz.** `start.bat` yalnızca .NET API (5000) + UI (5173) ayağa kaldırır. TTS servis process'i Faz 2 ProcessManager + UI ile elle tetiklenir.
+- **Model lazy.** App startup'ta `load()` ÇAĞIRMAZ; engine `is_loaded=False` bekler. Model yalnızca `/engines/load` ile yüklenir, `/engines/unload` ile boşalır (VRAM guard).
+- **Tek-engine.** App state'inde tek instance; yeni load öncesi eskisi unload (8GB VRAM).
+- **`/render` ham wav bytes döner.** Dosya sistemi sahibi .NET orkestratör; her chunk'ı `workspace/{slug}/audio/{id}.wav`'a yazar → parça-bazlı dinle/sil/yeniden-üret.
+- **uvicorn:** `app.py` `__main__` bloğu (manuel/standalone) + Faz 2 ProcessManager `python -m uvicorn src.tts.app:app --port 5001`.
+
 **Faz 1 notları:**
-- `requirements.txt` bu fazda güncellenir: fastapi, uvicorn, pynvml, noisereduce, ffmpeg-python eklenir. **(Bkz. B5: kurulum cu121 torch reconcile desenini korumalı.)**
+- `requirements.txt` **torch/torchaudio İÇERMEZ** (cu121 `--index-url` ile kurulur; PyPI'den çekilmemeli). `numpy` da `setup_python.ps1`'de yönetilir. Servis deps: fastapi, uvicorn[standard], nvidia-ml-py (pynvml değil — deprecation uyarısı guard'ı aborte ediyordu).
+- **B5 deseni `setup_python.ps1`'de kalıcı:** her `pip install` torch'u 2.6.0 CPU'ya düşürebilir → kurulum sonunda cu121 reconcile guard zorunlu. (chatterbox 0.1.7 `torch==2.6.0` pinler; cu121 index'i 2.5.1 sunar; pip "incompatible" uyarısı KOZMETİK — `2.5.1+cu121` runtime'da çalışıyor, smoke test geçti.)
 - `unload()` zorunlu: `del model` + `gc.collect()` + `torch.cuda.empty_cache()`.
-- Voice processor: ffmpeg normalize + gürültü temizleme + 16kHz mono.
+- Voice processor (1.2b): ffmpeg normalize + gürültü temizleme + 16kHz mono.
 
 ---
 
@@ -101,6 +131,8 @@ akışındaki kritik bug'ları gidermek için yapıldı.
 | **2.2** | System Monitor Endpoints (`/api/system/health` — RAM/VRAM/disk) | ⬜ |
 | **2.3** | SignalR genişletme (ServiceStateChanged, RamUsageUpdated, RenderProgress, VoiceProcessed) | ⬜ |
 | **2.4** | Service Control Endpoints (`/api/services/{id}/start|stop`, RAM pre-check) | ⬜ |
+
+**Faz 2 notu:** Sprint 0.4'ün ertelenen kapsamı (gerçek servis process yönetimi: PID, SIGTERM→SIGKILL, orphan tespiti) burada, 2.1 ProcessManager ile birlikte ele alınır.
 
 ---
 
@@ -118,8 +150,7 @@ akışındaki kritik bug'ları gidermek için yapıldı.
 
 **Faz 3 notları:**
 - Sprint 3.1 için Prompt 15 (CleanupPanel accordion) hazır taslak mevcut.
-- ✅ KAPANDI (B3 ile birlikte erken yapıldı).
-- ✅ KAPANDI (idempotent merge; detay borç tablosunda).
+- B1 (autoSaveTimer cleanup) ve B3 (pagesToContent merge bake) bu fazın hedefiydi; ikisi de **erken kapatıldı** (detay borç tablosunda).
 
 ---
 
@@ -132,6 +163,11 @@ akışındaki kritik bug'ları gidermek için yapıldı.
 |--------|-----|-------|
 | **4.1** | Chunk pipeline yenileme (her chunk'a `page`, `type`, page_marker chunk'ları) | ⬜ |
 | **4.2** | SRT altyazı üretimi (`generate_srt.py`, `[Sayfa N]` marker'lı) | ⬜ |
+
+**Faz 4 notu:** Manifest chunk şemasındaki `type`, `page`, `subtitle_start_ms`,
+`subtitle_end_ms` ve `render_state` alanları bu fazda eklenir (README'deki
+"hedef şema" notuna bakınız). Arayüzden altyazı *düzenleme* henüz roadmap'te
+madde değil — ürün gereksinimi olarak not edildi, Faz 4'e gelince eklenecek.
 
 ---
 
@@ -155,15 +191,15 @@ akışındaki kritik bug'ları gidermek için yapıldı.
 | **B2** | SignalR WebSocket proxy ikinci makinede kopuyordu — ✅ KAPANDI (0.5: tek makinede tekrarlanamadı, ikinci makine kaldırıldı) | — | Kapandı |
 | **B3** | `pagesToContent` merge bake — ✅ KAPANDI (`mergeDeleted` flag + `pagesToContent` `originalText` yazıyor → idempotent; eski baked reviewed dosyaları Reset gerektirir) | — | Kapandı |
 | **B4** | `Program.cs` (TextProcessor) hâlâ standalone CLI — API ile çakışan extract yolu, ileride retire | Düşük | 1.4 |
-| **B5** | `pip install` (ör. requirements.txt güncellemesi) chatterbox bağımlılık ağacını yeniden çözüp CPU torch'u geri getirebilir — 0.5'te reconcile guard yakaladı; Faz 1+ kurulum adımları cu121 reconcile desenini korumalı | Orta | 1.x |
+| **B5** | `pip install` chatterbox torch'unu (==2.6.0 CPU) getirip cu121 build'i ezebilir — ✅ KAPANDI (1.2a-i: `setup_python.ps1` pinli cu121 + reconcile guard + nvidia-ml-py; temiz venv'de doğrulandı). Desen Faz 1+ kurulum adımlarında KORUNMALI | — | Kapandı |
 
 ---
 
 ## Faz Bağımlılık Grafiği
 
 ```
-Faz 0 (0.4, 0.5 kaldı)
-  └─► Faz 1 (TTS abstraction + FastAPI)
+Faz 0 (0.4 ertelendi → Faz 1.2 sonrası)
+  └─► Faz 1 (TTS abstraction + FastAPI)   [1.1 ✅, 1.2 🔵]
         └─► Faz 2 (service orchestration)
               └─► Faz 3 (UI)
                     └─► Faz 4 (chunk pipeline + SRT)
@@ -171,7 +207,6 @@ Faz 0 (0.4, 0.5 kaldı)
 
 Bağımsız / paralel:
   Sprint 3.1 (cleanup accordion)
-  Sprint 0.5 (setup.bat) — ✅
 ```
 
 ---
@@ -179,11 +214,22 @@ Bağımsız / paralel:
 ## Önemli: Repomix Senkronizasyonu
 
 Claude project knowledge'ı bir repomix snapshot'ıdır ve **otomatik
-güncellenmez**. Sprint 0.1/0.2/0.3 değişiklikleri Antigravity tarafından
-yapıldı ama project knowledge hâlâ bu değişiklikler öncesini gösterebilir.
+güncellenmez**. Antigravity'nin yaptığı kod değişiklikleri (ve bazen
+prompt-dışı düzeltmeleri) project knowledge'a yansımayabilir.
 
 **Kural:** Yeni bir sprint prompt'u üretilmeden önce güncel repomix
 yüklenmelidir. Aksi halde Claude eski kod üzerine prompt üretir.
+
+---
+
+## Antigravity Çalışma Kuralı (oturum dersi)
+
+Antigravity birkaç kez prompt-dışı inisiyatif aldı (sistem Python kurulumu,
+`$env:PYTHONWARNINGS` ekleme, script'i kendiliğinden değiştirip yeniden
+çalıştırma). **Kural:** Her prompt'a açık kısıt eklenir —
+*"Test FAIL olursa DUR ve bildir; script'i kendiliğinden değiştirme/yeniden
+çalıştırma, eksik bağımlılık KURMA."* Kurulum/venv gibi riskli operasyonlar
+Antigravity'ye değil, kullanıcıya manuel bırakılır.
 
 ---
 
@@ -193,7 +239,7 @@ Her sprint sonunda:
 1. İlgili dosya/klasör varlığı doğrulandı
 2. Manuel test adımları geçti
 3. `TEST PASSED` terminale yazıldı
-4. Bu dosyada ilgili sprint `✅` işaretlendi (Claude prompt üretir, Antigravity günceller)
+4. Bu dosyada ilgili sprint `✅` işaretlendi
 5. Büyük sprint sonrası `git push`
 6. Yeni script/servis README ve gerekirse CLAUDE.md'ye eklendi
 
@@ -201,9 +247,9 @@ Her sprint sonunda:
 
 ## Sıradaki Adım
 
-**Sprint 1.1 — BaseTTSEngine (ABC) + ChatterboxEngine adapter + registry.**
-Faz 0 tamam (0.1–0.3, 0.5 ✅; 0.4 Faz 1.2 sonrasına ertelendi). B1/B3 ve
-dev-orchestration teardown kapatıldı. Chatterbox kurulu (0.5b) → TTS servis
-mimarisine geçiş açık. Ana tartışma: engine ABC arayüz tasarımı
-(`load`/`unload`/`synthesize`/`health` imzaları + adapter'ın
-`ChatterboxMultilingualTTS`'i sarması).
+**Sprint 1.2a-ii — `src/tts/app.py` (FastAPI TTS servisi).**
+1.1 ✅, 1.2a-i ✅ (kurulum altyapısı temiz venv'de doğrulandı, B5 kapandı).
+Tasarım kararları kilitli: lazy singleton engine (startup'ta yüklemez),
+5 endpoint (`/health` pynvml VRAM, `/engines`, `/engines/load`,
+`/engines/unload`, `/render` ham wav bytes), tek-engine, servis otomatik
+kalkmaz. Prompt öncesi güncel repomix yüklenir.
