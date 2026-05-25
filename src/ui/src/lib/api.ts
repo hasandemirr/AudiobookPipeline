@@ -58,6 +58,7 @@ export interface Section {
   page_end: number
   content: string
   pages: { page_number: number; text: string }[]
+  raw_pages: { page_number: number; text: string }[]
   is_reviewed: boolean
   repeated_lines: string[]
   detected_patterns: DetectedPattern[]

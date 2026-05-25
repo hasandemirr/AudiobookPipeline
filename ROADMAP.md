@@ -19,241 +19,249 @@
 
 ## Tamamlanan İş — Faz 0 Öncesi (Bug Fix & Review Sprint)
 
-Bu çalışmalar resmi faz numaralandırması öncesinde, Review/Cleanup
-akışındaki kritik bug'ları gidermek için yapıldı.
+Resmi faz numaralandırması öncesinde, Review/Cleanup akışındaki kritik
+bug'ları gidermek için yapıldı.
 
 | # | İş | Durum |
 |---|-----|-------|
 | F-1 | PDF extraction: digit separation (`ExtractPageText`) | ✅ |
 | F-2 | Pipeline sırası: `RemovePageNumbers` → `JoinBrokenLines` | ✅ |
 | F-3 | `StripEmbeddedPageNumbers` — satır içi sayfa numarası temizleme | ✅ |
-| F-4 | `JoinBrokenLines` — `IsShortUpperCase` guard (header birleşmesini önler) | ✅ |
+| F-4 | `JoinBrokenLines` — `IsShortUpperCase` guard | ✅ |
 | F-5 | Export: `StripPageMarkers` — `=== SAYFA N ===` strip | ✅ |
-| F-6 | `mergeCrossPageHyphens` — `!l.deleted` + `!l.suspicious` + kelime bazında suspicious skip | ✅ |
-| F-7 | `applyCleanup` — `!l.deleted` nonEmpty filtresi (position matching fix) | ✅ |
-| F-8 | Live preview (`previewIds` / `previewCleanup`) — hook + UI wiring | ✅ |
+| F-6 | `mergeCrossPageHyphens` — deleted/suspicious skip | ✅ |
+| F-7 | `applyCleanup` — nonEmpty filtresi (position matching fix) | ✅ |
+| F-8 | Live preview (`previewIds` / `previewCleanup`) | ✅ |
 | F-9 | Approve sonrası panel refresh — `resetQueries` | ✅ |
 | F-10 | Section reset endpoint — `DELETE /sections/{id}/reviewed` | ✅ |
-| F-11 | Delete page (`deletePage`) — tüm sayfa satırlarını deleted işaretle | ✅ |
+| F-11 | Delete page (`deletePage`) | ✅ |
 
 ---
 
 ## Build Hijyeni (Faz 1 sırasında, ad-hoc)
 
-Derleme/tip hata listesini sıfırlamak için yapılan izole düzeltmeler.
-
 | # | İş | Durum |
 |---|-----|-------|
-| H-1 | TS5101 — `tsconfig.json` `baseUrl` kaldırıldı (`paths` göreli; TS 6.x deprecation) | ✅ |
-| H-2 | TS18048 — `ReviewPage.tsx` `sectionData` narrowing (`?.` susturma yerine açık guard) | ✅ |
-| H-3 | CS8625 — `Section.ReviewedPath` `string?` yapıldı (Reset akışı null atıyor) | ✅ |
+| H-1 | TS5101 — `tsconfig.json` `baseUrl` kaldırıldı (`paths` göreli) | ✅ |
+| H-2 | TS18048 — `ReviewPage.tsx` `sectionData` açık narrowing | ✅ |
+| H-3 | CS8625 — `Section.ReviewedPath` `string?` | ✅ |
 
-Sonuç: `.NET` build 0 warning / 0 error, UI `tsc` + `vite build` temiz, Python import temiz.
+Sonuç: `.NET` build 0/0, UI `tsc` + `vite build` temiz, Python import temiz.
 
 ---
 
 ## FAZ 0 — Teknik Borç ve Kurulum Altyapısı
 
-> **Neden:** Production seviyesinde bug'lar. Tüm sonraki fazlar bu altyapı
-> üzerine inşa edilir.
-
 | Sprint | İş | Durum |
 |--------|-----|-------|
-| **0.1** | BackgroundService Queue (`Task.Run` kaldırıldı, `Channel<IJob>` + `QueuedHostedService` + `ExtractJob`) | ✅ |
+| **0.1** | BackgroundService Queue (`Channel<IJob>` + `QueuedHostedService` + `ExtractJob`) | ✅ |
 | **0.2** | ManifestService Distributed Lock (`SemaphoreSlim` per-slug, `UpdateAsync`) | ✅ |
-| **0.3** | Dependency Injection Cleanup (`ExtractConfig`, servisler `AddScoped`, `IServiceProvider` scope) | ✅ |
-| **0.4** | Zombie Process Cleanup (`ApplicationStopping` hook, PID dosyası, orphan tespiti) | ⬜ (ertelendi → Faz 1.2 sonrası) |
-| **0.5** | setup.bat + start.bat (full Python installer + cu121 reconcile + .env.example + API build fix + npm install) | ✅ |
+| **0.3** | Dependency Injection Cleanup (`ExtractConfig`, `AddScoped`, scope) | ✅ |
+| **0.4** | Zombie Process Cleanup (gerçek servis process yönetimi) | ⬜ (ertelendi → Faz 4.1) |
+| **0.5** | setup.bat + start.bat (Python installer + cu121 reconcile + .env + build + npm) | ✅ |
 
 ### Sprint 0.4 — Zombie Process Cleanup `⬜`
-**Neden:** Uygulama crash olduğunda Python/Ollama process'leri arka planda kalır.
-- `IHostApplicationLifetime.ApplicationStopping` hook
-- SIGTERM → 5sn bekle → SIGKILL
-- `config/{id}.pid` dosyası yönetimi
-- Başlangıçta port 5001 orphan tespiti
-- **Kısmen yapıldı (dev-orchestration):** `npm run dev` `--kill-others` + `start.ps1` çıkışta `taskkill /T /F` + 5000/5173 orphan port süpürmesi. Ctrl+C sonrası orphan kalmıyor.
-- **Kalan kapsam:** Gerçek servis process yönetimi (FastAPI/Ollama) — PID dosyası, SIGTERM→SIGKILL, başlangıçta orphan tespiti. Faz 1.2 sonrasına ertelendi (yöneteceği process orada doğuyor).
+- **Kısmen yapıldı (dev-orchestration):** `npm run dev --kill-others` + `start.ps1` çıkışta `taskkill /T /F` + 5000/5173 orphan süpürme. Ctrl+C sonrası orphan kalmıyor.
+- **Kalan kapsam:** Gerçek servis process yönetimi (FastAPI/Ollama) — PID dosyası, SIGTERM→SIGKILL, başlangıçta orphan tespiti. Faz 4.1 ProcessManager ile ele alınır.
 
 ### Sprint 0.5 — setup.bat + start.bat `✅`
-**Neden:** Yeni makinede `git clone` + `setup.bat` = çalışır sistem.
-- `.env.example` (versiyonlu şablon) + `setup.ps1`: .env türetme, klasör yapısı, API csproj build (TextProcessor değil), npm install (root + src/ui)
-- `setup_python.ps1`: py -3.11 tespit (auto-install YOK) → repo/venv → resemble-ai/chatterbox klon → numpy → torch cu121 (pinli 2.5.1) → `pip install -e chatterbox` → `requirements.txt` → cu121 torch reconcile guard → .env'e absolute CHATTERBOX_SRC/PYTHON_VENV. **Temiz venv'de uçtan uca doğrulandı.**
-- `.gitignore`: `venv/`, `chatterbox/`
-- `setup.bat` / `start.bat` ince launcher; `start.ps1` health-poll + `npm run dev` + tarayıcı aç
-- **B2 (SignalR proxy):** metha tek makinede tekrarlanamadı, ikinci makine kaldırıldı → kapatıldı.
-- `config/services.json` default: Faz 2'ye ertelendi (şema henüz tanımsız).
+- `.env.example` + `setup.ps1`: .env türetme, klasör yapısı, API build, npm install.
+- `setup_python.ps1`: py-3.11 tespit → venv → chatterbox klon → numpy → torch cu121 (pinli 2.5.1) → `pip install -e chatterbox` → `requirements.txt` → cu121 reconcile guard → .env. **Temiz venv'de doğrulandı.**
+- `.gitignore`: `venv/`, `chatterbox/`. start.ps1 health-poll + `npm run dev`.
+- B2 kapatıldı (tek makinede tekrarlanamadı). services.json → Faz 4'e ertelendi.
 
 ---
 
 ## FAZ 1 — TTS Servis Mimarisi
 
-> **Neden:** Model her render'da yükleniyor. Yeni engine eklemek mevcut kodu
-> baştan yazmayı gerektiriyor. FastAPI + abstraction ile model RAM'de kalıcı.
+> Model RAM'de kalıcı + engine abstraction (yeni model = yeni adapter).
 
 | Sprint | İş | Durum |
 |--------|-----|-------|
-| **1.1** | BaseTTSEngine (ABC) + ChatterboxEngine adapter + registry (`src/tts/`, smoke test: load→synthesize→unload, VRAM ~3.2GB→~8MB) | ✅ |
-| **1.2** | FastAPI TTS Servisi (port 5001) | 🔵 |
-| **1.3** | .NET → TTS Proxy (`TtsEndpoints` /api/tts/*, pass-through status+body, 503; Swashbuckle Swagger /swagger koşulsuz açık) | ✅ |
-| **1.4** | Legacy scripts retire: render_chunks/chunk_text/merge_audio → `scripts/legacy/`; sanity_test + test_env×2 silindi; test_tts_engine korundu | ✅ |
+| **1.1** | BaseTTSEngine (ABC) + ChatterboxEngine + registry (`src/tts/`, smoke test) | ✅ |
+| **1.2** | FastAPI TTS Servisi (port 5001) — çekirdek tamam, ses işleme ertelendi | ✅* |
+| **1.3** | .NET → TTS Proxy (`TtsEndpoints` /api/tts/*, pass-through; Swagger /swagger açık) | ✅ |
+| **1.4** | Legacy scripts retire (render_chunks/chunk_text/merge_audio → legacy/; eski testler silindi) | ✅ |
 
-### Sprint 1.2 — FastAPI TTS Servisi `🔵`
-İki alt-sprint olarak bölündü:
+`✅*` = çekirdek (1.2a) tamam; 1.2b (ses işleme) bilinçli ertelendi.
 
-- **1.2a — Çekirdek servis**
-  - **1.2a-i** `✅` — `requirements.txt` (torch'suz: fastapi, uvicorn[standard], nvidia-ml-py) + `setup_python.ps1`'e `-r` adımı + cu121 reconcile guard. **B5'i kapattı, temiz venv'de doğrulandı.**
-  - **1.2a-ii** `✅` — `src/tts/app.py`: FastAPI app, lazy singleton engine, endpoint'ler: `/health` (pynvml VRAM), `/engines`, `/engines/load`, `/engines/unload`, `/render` (ham wav bytes). Hata kodları doğrulandı: yüklü değilken render 409, text>300 ve geçersiz audio_prompt_path 422. Swagger `/docs` dahili.
-- **1.2b — Ses işleme** `⬜` (ertelendi) — `/voices/process`, `/voices/test` (ffmpeg normalize + noisereduce + 16kHz). 1.2a şişmesin diye ayrıldı.
+### Sprint 1.2 — FastAPI TTS Servisi
+- **1.2a-i** `✅` — `requirements.txt` (torch'suz) + setup'a `-r` + cu121 reconcile guard. B5 kapandı.
+- **1.2a-ii** `✅` — `src/tts/app.py`: lazy singleton engine, `/health` (VRAM), `/engines`, `/engines/load`, `/engines/unload`, `/render` (ham wav). Hata kodları: render 409, text>300 / geçersiz audio_prompt_path 422.
+- **1.2b — Ses işleme** `⬜` (ertelendi) — `/voices/process`, `/voices/test` (ffmpeg normalize + noisereduce + 16kHz mono). Referans-ses hattı backend'i; 5.3 Voice UI ile değer kazanır. `/render` audio_prompt_path tüketim ucu zaten hazır.
 
-**1.2 tasarım kararları (kilitli):**
-- **Servis otomatik kalkmaz.** `start.bat` yalnızca .NET API (5000) + UI (5173) ayağa kaldırır. TTS servis process'i Faz 2 ProcessManager + UI ile elle tetiklenir.
-- **Model lazy.** App startup'ta `load()` ÇAĞIRMAZ; engine `is_loaded=False` bekler. Model yalnızca `/engines/load` ile yüklenir, `/engines/unload` ile boşalır (VRAM guard).
-- **Tek-engine.** App state'inde tek instance; yeni load öncesi eskisi unload (8GB VRAM).
-- **`/render` ham wav bytes döner.** Dosya sistemi sahibi .NET orkestratör; her chunk'ı `workspace/{slug}/audio/{id}.wav`'a yazar → parça-bazlı dinle/sil/yeniden-üret.
-- **uvicorn:** `app.py` `__main__` bloğu (manuel/standalone) + Faz 2 ProcessManager `python -m uvicorn src.tts.app:app --port 5001`.
+**Kilitli kararlar:** Servis otomatik kalkmaz (start.bat sadece API+UI). Model lazy (sadece /engines/load). Tek-engine (yeni load öncesi eski unload). `/render` ham wav bytes; dosya sahibi .NET. `unload` = del+gc+empty_cache.
 
-**Faz 1 notları:**
-- `requirements.txt` **torch/torchaudio İÇERMEZ** (cu121 `--index-url` ile kurulur; PyPI'den çekilmemeli). `numpy` da `setup_python.ps1`'de yönetilir. Servis deps: fastapi, uvicorn[standard], nvidia-ml-py (pynvml değil — deprecation uyarısı guard'ı aborte ediyordu).
-- **B5 deseni `setup_python.ps1`'de kalıcı:** her `pip install` torch'u 2.6.0 CPU'ya düşürebilir → kurulum sonunda cu121 reconcile guard zorunlu. (chatterbox 0.1.7 `torch==2.6.0` pinler; cu121 index'i 2.5.1 sunar; pip "incompatible" uyarısı KOZMETİK — `2.5.1+cu121` runtime'da çalışıyor, smoke test geçti.)
-- `unload()` zorunlu: `del model` + `gc.collect()` + `torch.cuda.empty_cache()`.
-- Voice processor (1.2b): ffmpeg normalize + gürültü temizleme + 16kHz mono.
+**Notlar:** requirements.txt torch İÇERMEZ (cu121 index ile). B5 deseni kalıcı: her pip install torch'u 2.6.0 CPU'ya düşürebilir → cu121 reconcile guard zorunlu (2.5.1+cu121 runtime'da çalışır, pin kozmetik).
 
 ---
 
-## FAZ 2 — Service Orchestration
+## FAZ 2 — PageContent[] Yapısal Refactor + Review Tamamlama
 
-> **Neden:** Kullanıcı UI'dan servisleri yönetebilmeli. RAM yetersizse
-> başlatma engellenmeli.
+> **Neden:** `=== SAYFA N ===` string marker garanti edilebilir kaynak değil
+> (silinebilir, OCR bozar, lokalizasyon kırar). Render sayfa takibi için sağlam
+> yapısal sayfa modeli gerekir. Marker → yapısal `PageContent[]`; review adapte.
 
 | Sprint | İş | Durum |
 |--------|-----|-------|
-| **2.1** | ServiceRegistry + ProcessManager (services.json, start/stop, PID, RAM/VRAM) | ⬜ |
-| **2.2** | System Monitor Endpoints (`/api/system/health` — RAM/VRAM/disk) | ⬜ |
-| **2.3** | SignalR genişletme (ServiceStateChanged, RamUsageUpdated, RenderProgress, VoiceProcessed) | ⬜ |
-| **2.4** | Service Control Endpoints (`/api/services/{id}/start|stop`, RAM pre-check) | ⬜ |
+| **2.0** | `PageContent` modeli (page_number, text) | ✅ |
+| **2.0b** | `ChunkEntry` şema genişleme (Text, AudioPath, SubtitleStartMs/EndMs, IsLong) | ✅ |
+| **2a** | GET section migration-aware + async (.json oku, .txt lazy migrate, pointer güncelle) | ✅ |
+| **2b** | ExtractJob → `sections/{id}.json` (PageContent[]); per-page OCR fix | ✅ |
+| **2c** | PUT section yapısal `pages[]` (snake_case) → `reviewed/{id}.json` | ✅ |
+| **2d** | Frontend load yapısal `pagesToBlocks(pages)`; ölü `pagesToContent` silindi | ✅ |
+| **2e** | Raw text + Reset + Cleanup global (regresyon düzeltme + global scope) | 🔵 |
 
-**Faz 2 notu:** Sprint 0.4'ün ertelenen kapsamı (gerçek servis process yönetimi: PID, SIGTERM→SIGKILL, orphan tespiti) burada, 2.1 ProcessManager ile birlikte ele alınır.
+### 2.0–2d — PageContent[] Geçişi `✅`
+**Depolama:** Per-section JSON. Ham → `sections/{id}.json`, reviewed → `reviewed/{id}.json` (`List<PageContent>`). Pointer'lar `.json` gösterir (`TxtPath` adı korundu). Manifest hafif.
+**Migration:** Lazy — GET'te `.json` yoksa eski `.txt` `ParsePagesContent` ile bir kez `.json`'a çevrilir, pointer güncellenir.
+**Serileştirme:** ManifestService Options (SnakeCaseLower). `LoadPages`/`SavePages` paylaşır. Tüm HTTP yanıtları snake_case.
+**OCR fix sayfa-bağımsız** (bağlam kullanmaz) → sayfa sayfa uygulanır.
+
+**Oturum dersleri:** (1) Yarım geçiş: PUT eski format yazınca GET .json'u marker sanıp 500 verdi → 2c çözdü. (2) Kestrel senkron I/O yasağı → PUT `async`+`ReadToEndAsync`. (3) tsc geçmeden frontend "uygulanmış" sayılmaz (unused import → vite build çalışmadı). **Her frontend prompt'unda `npm run build` şart.**
+
+### 2e — Raw text + Reset + Cleanup global `🔵`
+**Neden (regresyon):** GET tek `content` (reviewed-öncelikli) dönüyor; frontend raw+edited'i ondan türetiyor → raw orijinali değil reviewed'ı gösteriyor + cleanup global scope'unu yitirdi.
+**Hedef model:** Raw (orijinal, `sections/{id}.json`) = kalıcı, raw panel + Reset kullanır. Edited (`reviewed/{id}.json`) = düzenlenmiş. GET iki içerik: `raw_pages` + `pages`. Reset reviewed'ı silip edited'i raw'a döndürür. Cleanup tüm kitaba (section-list checkbox + global apply). Ölü `content`/`parsePages` bu turda temizlenir.
+**Not:** Üçü aynı veri modelini paylaştığı için tek tasarım turu. Kararlar (cleanup nerede saklanır, raw GET'te ayrı alan, checkbox UI) tur başında netleşir.
 
 ---
 
-## FAZ 3 — UI Genişletmesi
+## FAZ 3 — Render Orkestrasyonu (asıl ürün değeri)
 
-> **Neden:** Backend hazır, kullanıcı her şeyi UI'dan yönetebilmeli.
+> Bir kitabı uçtan uca seslendir. Eski 3.4+4.1+4.2 birleşimi, öne çekildi.
+> PageContent[] (Faz 2) zemin. Önce varsayılan ses, sonra referans-ses.
 
 | Sprint | İş | Durum |
 |--------|-----|-------|
-| **3.1** | Cleanup Panel Accordion (sol sidebar'a taşı, HIGH/MEDIUM/LOW grupları) | ⬜ |
-| **3.2** | Services Dashboard (Settings sekmesi, RAM bar, start/stop, GPU temp) | ⬜ |
-| **3.3** | Voice Management UI (yükleme sihirbazı, 3 varyant test, profil kaydet) | ⬜ |
-| **3.4** | Render UI (kaynak seçimi, ses profili, progress, duraklat/durdur/devam) | ⬜ |
-| **3.5** | Output + Storage Manager (sayfa bazlı silme, purge, storage özeti) | ⬜ |
+| **3.0** | ffmpeg ön-koşul — setup'a kontrol (mp3/format encode) | ⬜ |
+| **3.1** | `ChunkEntry` şema tamamla: `PageStart`/`PageEnd` + `ChunkStatus` enum {Pending,Rendering,Done,Failed,Stale} | ⬜ |
+| **3.2** | ChunkBuilderService (.NET) + `POST /api/books/{slug}/chunk` (PageContent[]→page-aware chunk) | ⬜ |
+| **3.3** | Chunk CRUD — GET / PUT (done→stale) / DELETE (rendering→lock, done→soft-delete) | ⬜ |
+| **3.4** | RenderJob (BackgroundTaskQueue) — sıralı render, SignalR progress, resume, hata→dur | ⬜ |
+| **3.5** | `/render` PCM_S16 wav + süre header; .NET `audio/{id}.wav` yazar + manifest günceller | ⬜ |
+| **3.6** | Merge + mp3/format çıktı (ffmpeg, UI'dan format) + SRT (chunk süresi = altyazı süresi) | ⬜ |
+| **3.7** | Render UI (chunk listesi page badge + cross-page uyarı, dinle/sil/yeniden-üret, progress, duraklat/durdur/devam) | ⬜ |
 
-**Faz 3 notları:**
-- Sprint 3.1 için Prompt 15 (CleanupPanel accordion) hazır taslak mevcut.
-- B1 (autoSaveTimer cleanup) ve B3 (pagesToContent merge bake) bu fazın hedefiydi; ikisi de **erken kapatıldı** (detay borç tablosunda).
+**Kilitli kararlar:**
+- Chunk'layıcı .NET (C#). Cümle korunarak ≤280 char; aşarsa virgül→`"`→boşluk böl, `IsLong=true`. Same-page-preferred (gerekirse `PageStart`/`PageEnd` ile sayfa aşılır).
+- Chunk metni manifest'te (`ChunkEntry.Text`).
+- Sıralı render zorunlu (tek GPU). SignalR ilerleme. Başarılı→sonraki, hata→dur+bildir. Resume (`ChunkStatus`).
+- State machine: Pending→Rendering→Done; Done→Stale (edit); Stale→Rendering; Failed→Pending. Edit done→Stale (otomatik render yok, UI uyarır).
+- Ara chunk wav (16-bit PCM, çalınabilir) → merge → mp3 (UI'dan format). ffmpeg ön-koşul.
+- SRT: chunk'ın tüm metni render süresi kadar (render yan ürünü, ayrı hizalama yok).
+- `audio_prompt_path` opsiyonel (varsayılan ses). Klonlama = zero-shot, eğitim YOK; 1.2b + 5.3 ile eklenir (tüketim ucu hazır).
 
 ---
 
-## FAZ 4 — Chunk Pipeline ve Altyazı
-
-> **Neden:** Sayfa takibi, kısmi silme ve SRT altyazı için chunk pipeline'ı
-> timestamp ve sayfa bilgisi yazmalı.
+## FAZ 4 — Service Orchestration (eski Faz 2)
 
 | Sprint | İş | Durum |
 |--------|-----|-------|
-| **4.1** | Chunk pipeline yenileme (her chunk'a `page`, `type`, page_marker chunk'ları) | ⬜ |
-| **4.2** | SRT altyazı üretimi (`generate_srt.py`, `[Sayfa N]` marker'lı) | ⬜ |
-
-**Faz 4 notu:** Manifest chunk şemasındaki `type`, `page`, `subtitle_start_ms`,
-`subtitle_end_ms` ve `render_state` alanları bu fazda eklenir (README'deki
-"hedef şema" notuna bakınız). Arayüzden altyazı *düzenleme* henüz roadmap'te
-madde değil — ürün gereksinimi olarak not edildi, Faz 4'e gelince eklenecek.
+| **4.1** | ServiceRegistry + ProcessManager (services.json, start/stop, PID, RAM/VRAM; 0.4 burada) | ⬜ |
+| **4.2** | System Monitor Endpoints (`/api/system/health`) | ⬜ |
+| **4.3** | SignalR genişletme (ServiceStateChanged, RamUsageUpdated, RenderProgress) | ⬜ |
+| **4.4** | Service Control Endpoints (`/api/services/{id}/start|stop`, RAM pre-check) | ⬜ |
 
 ---
 
-## FAZ 5 — Ollama Entegrasyonu
-
-> **Neden:** Yabancı kelime tespiti, rakam/kısaltma düzeltme, telaffuz.
+## FAZ 5 — UI Genişletmesi (kalan)
 
 | Sprint | İş | Durum |
 |--------|-----|-------|
-| **5.1** | Ollama Proxy (`/api/ollama/*`, keep_alive ayarlanabilir) | ⬜ |
-| **5.2** | preprocess_ollama.py (rakam→yazı, kısaltma açma, fonetik) | ⬜ |
-| **5.3** | Ollama UI (model pull/delete, kitap bazında model seçimi) | ⬜ |
+| **5.1** | Cleanup Panel Accordion (sol sidebar, HIGH/MEDIUM/LOW) — 2e üstüne | ⬜ |
+| **5.2** | Services Dashboard (Settings, RAM bar, start/stop, GPU temp) | ⬜ |
+| **5.3** | Voice Management UI (yükleme sihirbazı, 3 varyant test, profil) — 1.2b ile referans-ses | ⬜ |
+| **5.4** | Output + Storage Manager (sayfa bazlı silme, purge, storage özeti) | ⬜ |
+
+---
+
+## FAZ 6 — Ollama Entegrasyonu
+
+| Sprint | İş | Durum |
+|--------|-----|-------|
+| **6.1** | Ollama Proxy (`/api/ollama/*`, keep_alive) | ⬜ |
+| **6.2** | preprocess_ollama.py (rakam→yazı, kısaltma, fonetik) | ⬜ |
+| **6.3** | Ollama UI (model pull/delete, kitap bazında seçim) | ⬜ |
 
 ---
 
 ## Açık Bug'lar ve Teknik Borç
 
-| # | Sorun | Öncelik | Hedef Sprint |
-|---|-------|---------|--------------|
-| **B1** | `autoSaveTimer` unmount cleanup — ✅ KAPANDI (B3 ile birlikte erken; unmount useEffect) | — | Kapandı |
-| **B2** | SignalR WebSocket proxy ikinci makinede kopuyordu — ✅ KAPANDI (0.5: tek makinede tekrarlanamadı, ikinci makine kaldırıldı) | — | Kapandı |
-| **B3** | `pagesToContent` merge bake — ✅ KAPANDI (`mergeDeleted` flag + `pagesToContent` `originalText` yazıyor → idempotent; eski baked reviewed dosyaları Reset gerektirir) | — | Kapandı |
-| **B4** | `Program.cs` (TextProcessor) hâlâ standalone CLI — API ile çakışan extract yolu, ileride retire | Düşük | 1.4 |
-| **B5** | `pip install` chatterbox torch'unu (==2.6.0 CPU) getirip cu121 build'i ezebilir — ✅ KAPANDI (1.2a-i: `setup_python.ps1` pinli cu121 + reconcile guard + nvidia-ml-py; temiz venv'de doğrulandı). Desen Faz 1+ kurulum adımlarında KORUNMALI | — | Kapandı |
+| # | Sorun | Öncelik | Hedef |
+|---|-------|---------|-------|
+| **B1** | autoSaveTimer unmount — ✅ KAPANDI | — | Kapandı |
+| **B2** | SignalR proxy ikinci makine — ✅ KAPANDI | — | Kapandı |
+| **B3** | pagesToContent merge bake — ✅ KAPANDI (2d'de tamamen silindi) | — | Kapandı |
+| **B4** | TextProcessor `Program.cs` + `OutputType=Exe` → Library'ye çevir + CLI retire. Build-etkileyen | Düşük | Faz 3 sonrası |
+| **B5** | pip install cu121 torch'u ezebilir — ✅ KAPANDI (reconcile guard). Desen KORUNMALI | — | Kapandı |
+| **B6** | Tek tıkta 2 istek (GET/PUT) — React strict-mode olası; ikincil | Düşük | İncelenecek |
+| **B7** | Pyrefly missing-import kozmetik (venv yerine sistem Python) — VS Code interpreter manuel | Kozmetik | — |
 
 ---
 
 ## Faz Bağımlılık Grafiği
 
 ```
-Faz 0 (0.4 ertelendi → Faz 1.2 sonrası)
-  └─► Faz 1 (TTS abstraction + FastAPI)   [1.1 ✅, 1.2 🔵]
-        └─► Faz 2 (service orchestration)
-              └─► Faz 3 (UI)
-                    └─► Faz 4 (chunk pipeline + SRT)
-                          └─► Faz 5 (Ollama)
+Faz 0 (0.4 → Faz 4.1)
+  └─► Faz 1 (TTS + FastAPI)          [1.1 ✅ 1.2a ✅ 1.3 ✅ 1.4 ✅; 1.2b ertelendi]
+        └─► Faz 2 (PageContent[])     [2.0–2d ✅; 2e 🔵]
+              └─► Faz 3 (Render Orkestrasyonu)  ← asıl ürün değeri
+                    └─► Faz 4 (service orchestration)
+                          └─► Faz 5 (kalan UI)
+                                └─► Faz 6 (Ollama)
 
-Bağımsız / paralel:
-  Sprint 3.1 (cleanup accordion)
+Paralel: 5.1 (cleanup accordion, 2e sonrası)
+Referans-ses: 1.2b (işleme) + 5.3 (Voice UI) — render hattına eklenti
 ```
 
 ---
 
 ## Önemli: Repomix Senkronizasyonu
 
-Claude project knowledge'ı bir repomix snapshot'ıdır ve **otomatik
-güncellenmez**. Antigravity'nin yaptığı kod değişiklikleri (ve bazen
-prompt-dışı düzeltmeleri) project knowledge'a yansımayabilir.
-
-**Kural:** Yeni bir sprint prompt'u üretilmeden önce güncel repomix
-yüklenmelidir. Aksi halde Claude eski kod üzerine prompt üretir.
+Project knowledge bir repomix snapshot'ıdır, **otomatik güncellenmez**.
+**Kural:** Yeni prompt öncesi güncel repomix yüklenir. **Doğrulama:** Yüklenince
+son sprint izleri grep'le kontrol edilir (örn. `pagesToContentList`,
+`PageContent.cs`); yoksa repomix bayattır, tekrar üretilir.
 
 ---
 
 ## Antigravity Çalışma Kuralı (oturum dersi)
 
-Antigravity birkaç kez prompt-dışı inisiyatif aldı (sistem Python kurulumu,
-`$env:PYTHONWARNINGS` ekleme, script'i kendiliğinden değiştirip yeniden
-çalıştırma). **Kural:** Her prompt'a açık kısıt eklenir —
-*"Test FAIL olursa DUR ve bildir; script'i kendiliğinden değiştirme/yeniden
-çalıştırma, eksik bağımlılık KURMA."* Kurulum/venv gibi riskli operasyonlar
-Antigravity'ye değil, kullanıcıya manuel bırakılır.
+Her prompt'a açık kısıt: *"Test FAIL olursa DUR ve bildir; script'i kendiliğinden
+değiştirme/yeniden çalıştırma, eksik bağımlılık KURMA."*
+- Kurulum/venv riskli ops → Antigravity'ye değil, kullanıcıya manuel.
+- Saf build/tip testi (`dotnet build`, `npm run build --prefix src/ui`) Antigravity yapabilir; FAIL→DUR+bildir, kendiliğinden düzeltme YOK.
+- `dotnet build` API çalışırken dosya-kilidi (MSB3027) → build öncesi API durdurulmalı.
 
 ---
 
-## Sprint Tamamlanma Kriteri (Genel)
+## Sprint Tamamlanma Kriteri
 
-Her sprint sonunda:
-1. İlgili dosya/klasör varlığı doğrulandı
-2. Manuel test adımları geçti
-3. `TEST PASSED` terminale yazıldı
-4. Bu dosyada ilgili sprint `✅` işaretlendi
-5. Büyük sprint sonrası `git push`
-6. Yeni script/servis README ve gerekirse CLAUDE.md'ye eklendi
+1. Dosya/klasör varlığı doğrulandı
+2. Manuel/runtime test geçti (kod testi IDE'de, runtime kullanıcıda)
+3. `TEST PASSED` bildirildi
+4. ROADMAP'te ilgili sprint `✅`
+5. Mantıksal birim bitince `git push` (atomik commit)
+6. README/CLAUDE.md senkronu
 
 ---
 
 ## Sıradaki Adım
 
-**Render Orkestrasyonu (öne çekildi — asıl ürün değeri).**
-Faz 1 kod maddeleri tamam: 1.1 ✅, 1.2a ✅, 1.3 ✅, 1.4 ✅. Ertelenenler: 1.2b (ses işleme), B4 (TextProcessor Exe→Library).
-Sıradaki: bir kitabı uçtan uca seslendirme. Kapsam (3.4+4.1+4.2 birleşimi):
-- Chunk'layıcı: cümle korunarak ≤280 char; uzun cümle virgül/" sınırından bölünür, uzun-chunk UI'da işaretlenir.
-- .NET RenderJob (mevcut BackgroundTaskQueue): chunk'lar SIRALI render (/api/tts/render); başarılıysa sonraki, hata→dur+SignalR bildir; resume (render_state).
-- /render PCM_S16 wav + süre (header) döner; .NET her chunk'ı workspace/{slug}/audio/{id}.wav'a yazar, manifest günceller (render_state, duration_ms, subtitle_start/end_ms).
-- Tüm chunk done → merge → output (ffmpeg ile mp3 vb; UI'dan format seçilebilir) + SRT (chunk süresi = o chunk metninin altyazı süresi).
-- audio_prompt_path opsiyonel (varsayilan ses; referans-ses klonlama 1.2b+3.3'te eklenir).
-Ön-koşul: setup'a ffmpeg kontrolü eklenecek.
-Prompt öncesi güncel repomix yüklenir.
+**Faz 2e — Raw text + Reset + Cleanup global.**
+PageContent[] geçişi (2.0–2d) tamam ve commit edildi: extract→json, GET
+migration-aware, PUT yapısal, frontend load yapısal. Save/approve/load çalışıyor.
+
+Ertelenenler: 1.2b (ses işleme), B4 (TextProcessor Exe→Library), B6 (çift istek),
+B7 (Pyrefly kozmetik).
+
+Sıradaki: 2e ile iki regresyonu düzelt (raw text orijinali göstermiyor, cleanup
+global scope'unu yitirdi) + Reset'i doğru raw kaynağına bağla. GET raw/edited'i
+ayrı versin (`raw_pages` + `pages`), cleanup tüm kitaba uygulansın. Ölü `content`/
+`parsePages` kalıntıları temizlenir.
+
+2e kapanınca → **Faz 3 Render Orkestrasyonu:** ffmpeg ön-koşul → ChunkEntry şema
+tamamla → ChunkBuilderService → Chunk CRUD → RenderJob → merge/mp3/SRT → Render UI.
+
+Prompt öncesi güncel repomix yüklenir ve son sprint izleri grep'le doğrulanır.

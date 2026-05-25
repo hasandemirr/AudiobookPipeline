@@ -55,13 +55,11 @@ export function useReviewState(slug: string | undefined) {
 
     const repeatedLines  = sectionData.repeated_lines  ?? []
 
-    const parsed = pagesToBlocks(
-      sectionData.pages,
-      repeatedLines
-    )
+    const rawParsed  = pagesToBlocks(sectionData.raw_pages, repeatedLines)
+    const editParsed = pagesToBlocks(sectionData.pages, repeatedLines)
 
-    setLeftPages(parsed)
-    setRightPages(mergeCrossPageHyphens(deepClonePages(parsed)))
+    setLeftPages(rawParsed)
+    setRightPages(mergeCrossPageHyphens(deepClonePages(editParsed)))
     setCleanupSnapshot(null)
     setAppliedPatternsCount(0)
     setIsDirty(false)

@@ -78,6 +78,12 @@ public static class SectionEndpoints
             });
         }
 
+        // Raw pages = always the original extract (sections/{id}.json), never reviewed.
+        // Falls back to `pages` only if the section json is missing (e.g. legacy just migrated to reviewed).
+        var rawPages = File.Exists(sectionJson)
+            ? svc.LoadPages(sectionJson)
+            : pages;
+
         // Backward-compat: keep returning marker string content during migration.
         var content = string.Join("\n\n",
             pages.Select(p => $"=== SAYFA {p.PageNumber} ===\n{p.Text}"));
@@ -92,6 +98,7 @@ public static class SectionEndpoints
             pageEnd = section.PageEnd,
             content,
             pages,
+            rawPages,
             repeatedLines    = manifest.RepeatedLines,
             detectedPatterns = manifest.DetectedPatterns,
             isReviewed = !string.IsNullOrEmpty(section.ReviewedPath)
