@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
@@ -24,6 +25,7 @@ interface Props {
   onPrev: () => void
   onNext: () => void
   onReset: () => void
+  onResetAll: () => void
 }
 
 const statusVariant = (status: string) => {
@@ -41,8 +43,11 @@ const statusLabel = (status: string) => {
 export function ReviewToolbar({
   currentSection, currentIndex, sectionsLength,
   isDirty, lastSaved, isSaving, isApproving,
-  onSave, onApprove, onNarrate, onExport, onPrev, onNext, onReset,
+  onSave, onApprove, onNarrate, onExport, onPrev, onNext, onReset, onResetAll,
 }: Props) {
+  const [resetMenu, setResetMenu] = useState(false)
+  const [confirmAll, setConfirmAll] = useState(false)
+
   const saveStatus = isSaving
     ? '⟳ Saving...'
     : isDirty
@@ -79,15 +84,75 @@ export function ReviewToolbar({
             : <VolumeX size={15} className="text-muted-foreground" />}
         </Button>
 
-        {currentSection?.status !== 'extracted' && (
+        <div className="relative">
           <Button variant="ghost" size="sm"
-            onClick={onReset}
+            onClick={() => { setResetMenu(true); setConfirmAll(false) }}
             className="text-destructive hover:bg-destructive/10 px-2"
             title="Reset to raw extracted state">
             <RotateCcw size={13} className="mr-1" />
             Reset
           </Button>
-        )}
+          {resetMenu && (
+            <>
+              <div className="fixed inset-0 z-40"
+                onClick={() => { setResetMenu(false); setConfirmAll(false) }} />
+              <div className="absolute right-0 top-full mt-1 z-50
+                              bg-popover border rounded-md shadow-md
+                              text-xs overflow-hidden min-w-[200px]">
+                {!confirmAll ? (
+                  <>
+                    <button
+                      className="w-full text-left px-3 py-2 hover:bg-muted
+                                 transition-colors flex items-center gap-2"
+                      onClick={() => {
+                        onReset()
+                        setResetMenu(false)
+                      }}
+                    >
+                      <RotateCcw size={12} className="shrink-0" />
+                      Bu bölümü resetle
+                    </button>
+                    <button
+                      className="w-full text-left px-3 py-2 transition-colors
+                                 flex items-center gap-2 text-destructive
+                                 hover:bg-destructive/10"
+                      onClick={() => setConfirmAll(true)}
+                    >
+                      <RotateCcw size={12} className="shrink-0" />
+                      Tüm kitabı resetle
+                    </button>
+                  </>
+                ) : (
+                  <div className="p-3 space-y-2">
+                    <p className="text-destructive font-medium">
+                      Emin misiniz?
+                    </p>
+                    <p className="text-muted-foreground">
+                      Tüm bölümlerdeki düzenlemeler silinir ve raw metne dönülür.
+                      Bu işlem geri alınamaz.
+                    </p>
+                    <div className="flex gap-2 pt-1">
+                      <Button size="sm" variant="destructive"
+                        className="flex-1 text-xs"
+                        onClick={() => {
+                          onResetAll()
+                          setResetMenu(false)
+                          setConfirmAll(false)
+                        }}>
+                        Evet, tüm kitabı resetle
+                      </Button>
+                      <Button size="sm" variant="outline"
+                        className="flex-1 text-xs"
+                        onClick={() => { setResetMenu(false); setConfirmAll(false) }}>
+                        İptal
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </div>
 
         <Button variant="ghost" size="icon"
           onClick={onPrev} disabled={currentIndex <= 0}>

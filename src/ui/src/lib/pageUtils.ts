@@ -340,7 +340,7 @@ export function applyPatternsToPages(
         if (!shouldDelete) {
           for (const cp of custom) {
             const t = trimmed.toLowerCase()
-            const v = cp.text.toLowerCase()
+            const v = cp.text.trim().toLowerCase()
             if (
               (cp.matchType === 'exact' && t === v) ||
               (cp.matchType === 'starts-with' && t.startsWith(v)) ||

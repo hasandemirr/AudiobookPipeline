@@ -17,6 +17,8 @@ public static class SectionEndpoints
             ToggleNarrate);
         app.MapDelete("/api/books/{slug}/sections/{id}/reviewed", 
             ResetSection);
+        app.MapDelete("/api/books/{slug}/sections/reviewed-all",
+            ResetAllSections);
     }
 
     private static async Task<IResult> GetSection(
@@ -308,22 +310,63 @@ public static class SectionEndpoints
             return Results.NotFound(
                 new { message = $"{id} not found." });
 
-        if (!string.IsNullOrEmpty(section.ReviewedPath))
-        {
-            var fullPath = paths.ToAbsolute(section.ReviewedPath);
-            if (File.Exists(fullPath))
-                File.Delete(fullPath);
+        // Resolve reviewed json by file path (ReviewedPath may be null when the
+        // section was only touched by global cleanup, which leaves it unset).
+        var txtFile = Path.GetFileName(section.TxtPath);
+        var reviewedJson = paths.ReviewedJsonPath(slug, txtFile);
+        if (File.Exists(reviewedJson))
+            File.Delete(reviewedJson);
 
-            section.ReviewedPath = null;
-            section.Status = "extracted";
-            svc.Save(paths.ManifestPath(slug), manifest);
-        }
+        section.ReviewedPath = null;
+        section.Status = "extracted";
+        svc.Save(paths.ManifestPath(slug), manifest);
 
         return Results.Ok(new
         {
             id = section.Id,
             status = "extracted"
         });
+    }
+
+    // Reset ALL sections back to their raw extracted state: delete every
+    // reviewed.json, clear pointers, set Status to "extracted". Destructive —
+    // all user edits/cleanup across the whole book are discarded.
+    private static IResult ResetAllSections(
+        string slug,
+        PathService paths, ManifestService svc)
+    {
+        if (!paths.ManifestExists(slug))
+            return Results.NotFound(new { message = $"{slug} not found." });
+
+        var manifestPath = paths.ManifestPath(slug);
+        var manifest = svc.Load(manifestPath);
+
+        // Delete EVERY reviewed json on disk (regardless of ReviewedPath, which
+        // global cleanup leaves null). This guarantees a clean "freshly extracted"
+        // state. GET resolves edited content by file existence, so any leftover
+        // reviewed json would otherwise keep showing cleaned text.
+        var reviewedDir = paths.ReviewedDir(slug);
+        if (Directory.Exists(reviewedDir))
+        {
+            foreach (var f in Directory.GetFiles(reviewedDir, "*.json"))
+                File.Delete(f);
+        }
+
+        // Reset every section's manifest state back to raw/extracted.
+        var resetIds = new List<string>();
+        foreach (var section in manifest.Sections)
+        {
+            section.ReviewedPath = null;
+            if (section.Status != "extracted")
+            {
+                section.Status = "extracted";
+            }
+            resetIds.Add(section.Id);
+        }
+
+        svc.Save(manifestPath, manifest);
+
+        return Results.Ok(new { reset = resetIds });
     }
 
     // Page marker parse — "=== SAYFA N ===" formatı

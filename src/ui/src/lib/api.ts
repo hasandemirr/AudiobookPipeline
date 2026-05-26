@@ -192,4 +192,10 @@ export const api = {
       `${BASE}/books/${slug}/sections/${id}/reviewed`,
       { method: 'DELETE' }
     ),
+
+  resetAll: (slug: string) =>
+    request<{ reset: string[] }>(
+      `${BASE}/books/${slug}/sections/reviewed-all`,
+      { method: 'DELETE' }
+    ),
 }

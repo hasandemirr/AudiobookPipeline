@@ -28,6 +28,7 @@ export default function ReviewPage() {
     saveMutation,
     approveMutation,
     resetSectionMutation,
+    resetAllMutation,
     narrateMutation,
     activePageIndex,
     setActivePageIndex,
@@ -206,6 +207,7 @@ export default function ReviewPage() {
                 currentIndex < sections.length - 1 &&
                 goTo(sections[currentIndex + 1].id)}
               onReset={() => resetSectionMutation.mutate()}
+              onResetAll={() => resetAllMutation.mutate()}
             />
 
             {/* Pagination bar */}

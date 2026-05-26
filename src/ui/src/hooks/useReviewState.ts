@@ -135,6 +135,21 @@ export function useReviewState(slug: string | undefined) {
     },
   })
 
+  const resetAllMutation = useMutation({
+    mutationFn: () => api.resetAll(slug!),
+    onSuccess: () => {
+      toast.success('Tüm kitap raw haline döndürüldü.')
+      queryClient.invalidateQueries({ queryKey: ['book', slug] })
+      if (selectedId) {
+        queryClient.resetQueries({ queryKey: ['section', slug, selectedId] })
+      }
+    },
+    onError: (err) => {
+      const message = err instanceof ApiError ? err.message : 'Reset failed.'
+      toast.error(message)
+    },
+  })
+
   // Narrate toggle
   const narrateMutation = useMutation({
     mutationFn: () => api.toggleNarrate(slug!, selectedId!),
@@ -436,6 +451,7 @@ export function useReviewState(slug: string | undefined) {
     saveMutation,
     approveMutation,
     resetSectionMutation,
+    resetAllMutation,
     narrateMutation,
     // Actions
     goTo,
