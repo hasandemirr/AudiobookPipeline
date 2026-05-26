@@ -10,6 +10,7 @@ public static class SectionEndpoints
     {
         app.MapGet("/api/books/{slug}/sections/{id}", GetSection);
         app.MapPut("/api/books/{slug}/sections/{id}", UpdateSection);
+        app.MapPost("/api/books/{slug}/sections/bulk-save", BulkSaveSections);
         app.MapPost("/api/books/{slug}/sections/{id}/approve", 
             ApproveSection);
         app.MapPatch("/api/books/{slug}/sections/{id}/narrate", 
@@ -157,8 +158,72 @@ public static class SectionEndpoints
         });
     }
 
+    // Bulk-save reviewed pages for multiple sections WITHOUT touching Status or
+    // ReviewedPath. Used by global cleanup: content is written to reviewed/{id}.json
+    // so GET (which checks file existence) serves it as edited, but the section
+    // stays "extracted"/unreviewed until the user opens and saves it themselves.
+    // This endpoint is pure storage — it contains NO cleanup match logic (that
+    // lives only in the frontend pure function applyPatternsToPages).
+    private static async Task<IResult> BulkSaveSections(
+        string slug,
+        HttpRequest request,
+        PathService paths, ManifestService svc)
+    {
+        if (!paths.ManifestExists(slug))
+            return Results.NotFound(new { message = $"{slug} not found." });
+
+        var manifestPath = paths.ManifestPath(slug);
+        var manifest = svc.Load(manifestPath);
+
+        var body = await new StreamReader(request.Body).ReadToEndAsync();
+        BulkSaveBody? parsed;
+        try
+        {
+            parsed = System.Text.Json.JsonSerializer.Deserialize<BulkSaveBody>(
+                body, JsonOptions.Pages);
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return Results.BadRequest(new { message = "Invalid payload." });
+        }
+        if (parsed?.Sections is null || parsed.Sections.Count == 0)
+            return Results.BadRequest(new { message = "sections field required." });
+
+        var reviewedDir = paths.ReviewedDir(slug);
+        Directory.CreateDirectory(reviewedDir);
+
+        var saved = new List<string>();
+        foreach (var item in parsed.Sections)
+        {
+            if (string.IsNullOrEmpty(item.Id) || item.Pages is null) continue;
+            var section = manifest.Sections.FirstOrDefault(s => s.Id == item.Id);
+            if (section is null) continue;
+
+            var fileName = Path.GetFileName(section.TxtPath);
+            var reviewedPath = Path.Combine(reviewedDir, fileName);
+            svc.SavePages(reviewedPath, item.Pages);
+            // NOTE: deliberately NOT setting section.ReviewedPath or section.Status.
+            saved.Add(section.Id);
+        }
+
+        // NOTE: manifest is intentionally NOT saved — no status/pointer changes.
+
+        return Results.Ok(new { saved });
+    }
+
     private sealed class UpdateSectionBody
     {
+        public List<PageContent>? Pages { get; set; }
+    }
+
+    private sealed class BulkSaveBody
+    {
+        public List<BulkSaveItem>? Sections { get; set; }
+    }
+
+    private sealed class BulkSaveItem
+    {
+        public string? Id { get; set; }
         public List<PageContent>? Pages { get; set; }
     }
 

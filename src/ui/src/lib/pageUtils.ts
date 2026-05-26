@@ -1,3 +1,6 @@
+import type { DetectedPattern } from './api'
+import type { CustomPattern } from '../components/review/CleanupPanel'
+
 export type PageBlock = {
   pageNumber: number
   text: string
@@ -298,4 +301,59 @@ export function pagesToBlocks(
       }))
     return { pageNumber, text: pageText, lines }
   })
+}
+
+// Pure cleanup: mark lines matching selected/custom patterns as deleted.
+// IMPORTANT: This is the SINGLE source of cleanup match logic. It is mirrored
+// nowhere — both open-section cleanup (useReviewState.applyCleanup) and global
+// cleanup call THIS function. If match rules change, change them ONLY here.
+// Per-page position logic (first/last) uses each page's own nonEmpty ordering.
+export function applyPatternsToPages(
+  pages: PageBlock[],
+  selected: DetectedPattern[],
+  custom: CustomPattern[]
+): PageBlock[] {
+  const updated = pages.map(page => {
+    const nonEmpty = page.lines.filter(
+      l => !l.deleted && !l.mergeDeleted && l.text.trim() !== ''
+    )
+    return {
+      ...page,
+      lines: page.lines.map((line) => {
+        if (line.deleted) return line
+        const trimmed = line.text.trim()
+        let shouldDelete = false
+        for (const pattern of selected) {
+          const matches = trimmed.toLowerCase() === pattern.text.toLowerCase()
+          if (!matches) continue
+          if (pattern.position === 'first') {
+            const firstNonEmpty = nonEmpty[0]
+            if (firstNonEmpty?.id === line.id) shouldDelete = true
+          } else if (pattern.position === 'last') {
+            const lastNonEmpty = nonEmpty[nonEmpty.length - 1]
+            if (lastNonEmpty?.id === line.id) shouldDelete = true
+          } else {
+            shouldDelete = true
+          }
+          if (shouldDelete) break
+        }
+        if (!shouldDelete) {
+          for (const cp of custom) {
+            const t = trimmed.toLowerCase()
+            const v = cp.text.toLowerCase()
+            if (
+              (cp.matchType === 'exact' && t === v) ||
+              (cp.matchType === 'starts-with' && t.startsWith(v)) ||
+              (cp.matchType === 'ends-with' && t.endsWith(v))
+            ) {
+              shouldDelete = true
+              break
+            }
+          }
+        }
+        return shouldDelete ? { ...line, deleted: true } : line
+      }),
+    }
+  })
+  return mergeCrossPageHyphens(updated)
 }

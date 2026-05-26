@@ -31,6 +31,11 @@ interface CleanupPanelProps {
   ) => void
   onReset: () => void
   appliedCount: number
+  onApplyGlobal: (
+    selected: DetectedPattern[],
+    custom: CustomPattern[]
+  ) => void
+  selectedSectionCount: number
 }
 
 export function CleanupPanel({
@@ -39,6 +44,8 @@ export function CleanupPanel({
   onPreview,
   onReset,
   appliedCount,
+  onApplyGlobal,
+  selectedSectionCount,
 }: CleanupPanelProps) {
   const [openGroups, setOpenGroups] = useState<Set<string>>(
     () => new Set(['high'])
@@ -107,6 +114,16 @@ export function CleanupPanel({
       .filter(s => s.checked)
       .map(s => s.pattern)
     onApply(
+      selected,
+      customPatterns.filter(c => c.checked)
+    )
+  }
+
+  const handleApplyGlobal = () => {
+    const selected = selections
+      .filter(s => s.checked)
+      .map(s => s.pattern)
+    onApplyGlobal(
       selected,
       customPatterns.filter(c => c.checked)
     )
@@ -286,6 +303,13 @@ export function CleanupPanel({
           onClick={handleApply} disabled={selectedCount === 0}>
           <Trash2 size={11} className="mr-1" />
           Apply ({selectedCount})
+        </Button>
+        <Button size="sm" variant="secondary"
+          className="w-full text-xs mt-1.5"
+          onClick={handleApplyGlobal}
+          disabled={selectedCount === 0 || selectedSectionCount === 0}>
+          <Trash2 size={11} className="mr-1" />
+          Seçili bölümlere uygula ({selectedSectionCount})
         </Button>
       </div>
     </div>

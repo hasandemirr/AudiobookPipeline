@@ -9,6 +9,9 @@ interface Props {
   sections: Section[]
   selectedId: string | null
   onSelect: (id: string) => void
+  selectedIds: Set<string>
+  onToggleSelect: (id: string) => void
+  onToggleAll: () => void
   onBack: () => void
 }
 
@@ -26,7 +29,7 @@ const statusLabel = (status: string) => {
 
 export function SectionList({
   slug, manifest, sections,
-  selectedId, onSelect, onBack,
+  selectedId, onSelect, selectedIds, onToggleSelect, onToggleAll, onBack,
 }: Props) {
   return (
     <div className="flex flex-col h-full overflow-hidden">
@@ -45,15 +48,40 @@ export function SectionList({
         </div>
       </div>
 
+      <label className="flex items-center gap-2 px-3 py-1.5 border-b
+                        text-xs text-muted-foreground cursor-pointer
+                        hover:bg-muted/50">
+        <input
+          type="checkbox"
+          className="h-3.5 w-3.5"
+          checked={sections.length > 0 && selectedIds.size === sections.length}
+          ref={el => {
+            if (el) el.indeterminate =
+              selectedIds.size > 0 && selectedIds.size < sections.length
+          }}
+          onChange={onToggleAll}
+        />
+        Tümünü seç ({selectedIds.size})
+      </label>
+
       <div className="flex-1 overflow-auto">
         {sections.map(s => (
-          <button
+          <div
             key={s.id}
-            onClick={() => onSelect(s.id)}
-            className={`w-full text-left px-3 py-2.5 border-b
-                       text-sm hover:bg-muted/50 transition-colors
+            className={`flex items-start gap-2 px-3 py-2.5 border-b
+                       hover:bg-muted/50 transition-colors
                        ${selectedId === s.id ? 'bg-muted' : ''}`}
           >
+            <input
+              type="checkbox"
+              className="h-3.5 w-3.5 mt-0.5 shrink-0"
+              checked={selectedIds.has(s.id)}
+              onChange={() => onToggleSelect(s.id)}
+            />
+            <button
+              onClick={() => onSelect(s.id)}
+              className="flex-1 min-w-0 text-left text-sm"
+            >
             <div className="flex items-center justify-between gap-1">
               <span className="truncate font-medium text-xs">
                 {s.title}
@@ -69,7 +97,8 @@ export function SectionList({
               p.{s.page_start}–{s.page_end}
               {!s.narrate && ' · silent'}
             </p>
-          </button>
+            </button>
+          </div>
         ))}
       </div>
     </div>

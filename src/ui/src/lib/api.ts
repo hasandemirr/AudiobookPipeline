@@ -112,6 +112,24 @@ export const api = {
       }
     ),
 
+  bulkSave: (
+    slug: string,
+    sections: { id: string; pages: { pageNumber: number; text: string }[] }[]
+  ) =>
+    request<{ saved: string[] }>(
+      `${BASE}/books/${slug}/sections/bulk-save`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sections: sections.map(s => ({
+            id: s.id,
+            pages: s.pages.map(p => ({ page_number: p.pageNumber, text: p.text })),
+          })),
+        }),
+      }
+    ),
+
   approveSection: (slug: string, id: string) =>
     request<ApproveResult>(
       `${BASE}/books/${slug}/sections/${id}/approve`,

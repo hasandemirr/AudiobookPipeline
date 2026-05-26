@@ -36,6 +36,7 @@ export default function ReviewPage() {
     toggleLine,
     applyDelete,
     applyCleanup,
+    applyCleanupGlobal,
     previewCleanup,
     previewIds,
     resetCleanup,
@@ -49,6 +50,34 @@ export default function ReviewPage() {
 
   // Resizable cleanup panel height
   const [cleanupHeight, setCleanupHeight] = useState(280)
+  const [selectedSectionIds, setSelectedSectionIds] = useState<Set<string>>(
+    new Set()
+  )
+
+  const toggleSectionSelect = useCallback((id: string) => {
+    setSelectedSectionIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }, [])
+
+  const toggleAllSections = useCallback(() => {
+    setSelectedSectionIds(prev =>
+      prev.size === sections.length
+        ? new Set()
+        : new Set(sections.map(s => s.id))
+    )
+  }, [sections])
+
+  const handleApplyGlobal = useCallback(
+    (selected: Parameters<typeof applyCleanupGlobal>[0],
+     custom: Parameters<typeof applyCleanupGlobal>[1]) => {
+      applyCleanupGlobal(selected, custom, Array.from(selectedSectionIds))
+    },
+    [applyCleanupGlobal, selectedSectionIds]
+  )
   const dragRef = useRef<{ startY: number; startH: number } | null>(null)
 
   const onDragStart = useCallback((e: React.MouseEvent) => {
@@ -89,6 +118,9 @@ export default function ReviewPage() {
             sections={sections}
             selectedId={selectedId}
             onSelect={goTo}
+            selectedIds={selectedSectionIds}
+            onToggleSelect={toggleSectionSelect}
+            onToggleAll={toggleAllSections}
             onBack={() => navigate('/')}
           />
         </div>
@@ -112,6 +144,8 @@ export default function ReviewPage() {
                 <CleanupPanel
                   patterns={sectionData.detected_patterns}
                   onApply={applyCleanup}
+                  onApplyGlobal={handleApplyGlobal}
+                  selectedSectionCount={selectedSectionIds.size}
                   onPreview={previewCleanup}
                   onReset={resetCleanup}
                   appliedCount={appliedPatternsCount}

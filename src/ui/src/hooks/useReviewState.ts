@@ -8,6 +8,7 @@ import {
   pagesToContentList,
   deepClonePages,
   mergeCrossPageHyphens,
+  applyPatternsToPages,
 } from '../lib/pageUtils'
 import type { DetectedPattern } from '../lib/api'
 import type { CustomPattern } from '../components/review/CleanupPanel'
@@ -232,61 +233,7 @@ export function useReviewState(slug: string | undefined) {
       // Snapshot for reset
       setCleanupSnapshot(deepClonePages(rightPages))
 
-      setRightPages(prev => {
-        const updated = prev.map(page => {
-          const nonEmpty = page.lines.filter(
-            l => !l.deleted && !l.mergeDeleted && l.text.trim() !== ''
-          )
-
-          return {
-            ...page,
-            lines: page.lines.map((line) => {
-              if (line.deleted) return line
-
-              const trimmed = line.text.trim()
-              let shouldDelete = false
-
-              // Check detected patterns
-              for (const pattern of selected) {
-                const matches = trimmed.toLowerCase() === pattern.text.toLowerCase()
-
-                if (!matches) continue
-
-                if (pattern.position === 'first') {
-                  const firstNonEmpty = nonEmpty[0]
-                  if (firstNonEmpty?.id === line.id) shouldDelete = true
-                } else if (pattern.position === 'last') {
-                  const lastNonEmpty = nonEmpty[nonEmpty.length - 1]
-                  if (lastNonEmpty?.id === line.id) shouldDelete = true
-                } else {
-                  shouldDelete = true
-                }
-
-                if (shouldDelete) break
-              }
-
-              // Check custom patterns
-              if (!shouldDelete) {
-                for (const cp of custom) {
-                  const t = trimmed.toLowerCase()
-                  const v = cp.text.toLowerCase()
-                  if (
-                    (cp.matchType === 'exact' && t === v) ||
-                    (cp.matchType === 'starts-with' && t.startsWith(v)) ||
-                    (cp.matchType === 'ends-with' && t.endsWith(v))
-                  ) {
-                    shouldDelete = true
-                    break
-                  }
-                }
-              }
-
-              return shouldDelete ? { ...line, deleted: true } : line
-            }),
-          }
-        })
-        return mergeCrossPageHyphens(updated)
-      })
+      setRightPages(prev => applyPatternsToPages(prev, selected, custom))
 
       setAppliedPatternsCount(selected.length + custom.length)
       setIsDirty(true)
@@ -296,6 +243,39 @@ export function useReviewState(slug: string | undefined) {
       autoSaveTimer.current = setTimeout(() => saveMutation.mutate(), 2000)
     },
     [rightPages, saveMutation]
+  )
+
+  // Global cleanup: apply selected/custom patterns to MULTIPLE sections at once.
+  // Disk-based: fetch each section's current edited pages, run the SAME pure
+  // match function, then persist all via one bulk-save (which does NOT change
+  // section Status — they stay unreviewed until the user opens them).
+  // Autosave already flushes the open section, so we treat all sections uniformly.
+  const applyCleanupGlobal = useCallback(
+    async (
+      selected: DetectedPattern[],
+      custom: CustomPattern[],
+      sectionIds: string[]
+    ) => {
+      if (!slug || sectionIds.length === 0) return
+
+      const payload: { id: string; pages: { pageNumber: number; text: string }[] }[] = []
+      for (const id of sectionIds) {
+        const data = await api.getSection(slug, id)
+        const blocks = pagesToBlocks(data.pages, data.repeated_lines ?? [])
+        const cleaned = applyPatternsToPages(blocks, selected, custom)
+        payload.push({ id, pages: pagesToContentList(cleaned) })
+      }
+
+      await api.bulkSave(slug, payload)
+
+      // Refresh book list + the currently open section (if any) so the user
+      // sees the applied result immediately.
+      queryClient.invalidateQueries({ queryKey: ['book', slug] })
+      if (selectedId) {
+        queryClient.resetQueries({ queryKey: ['section', slug, selectedId] })
+      }
+    },
+    [slug, selectedId, queryClient]
   )
 
   const previewCleanup = useCallback(
@@ -455,6 +435,7 @@ export function useReviewState(slug: string | undefined) {
     toggleLine,
     applyDelete,
     applyCleanup,
+    applyCleanupGlobal,
     previewCleanup,
     previewIds,
     resetCleanup,
