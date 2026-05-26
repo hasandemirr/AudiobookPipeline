@@ -110,7 +110,8 @@ Sonuç: `.NET` build 0/0, UI `tsc` + `vite build` temiz, Python import temiz.
 | **2b** | ExtractJob → `sections/{id}.json` (PageContent[]); per-page OCR fix | ✅ |
 | **2c** | PUT section yapısal `pages[]` (snake_case) → `reviewed/{id}.json` | ✅ |
 | **2d** | Frontend load yapısal `pagesToBlocks(pages)`; ölü `pagesToContent` silindi | ✅ |
-| **2e** | Raw text + Reset + Cleanup global (regresyon düzeltme + global scope) | 🔵 |
+| **2e** | Raw text + Reset + Cleanup global (regresyon düzeltme + global scope) | ✅ |
+| **2f** | Review UX cilası: scoped delete/reset (bölüm/kitap), panel her-zaman-açık, ilk-section-otomatik, buton görsel birliği | ✅ |
 
 ### 2.0–2d — PageContent[] Geçişi `✅`
 **Depolama:** Per-section JSON. Ham → `sections/{id}.json`, reviewed → `reviewed/{id}.json` (`List<PageContent>`). Pointer'lar `.json` gösterir (`TxtPath` adı korundu). Manifest hafif.
@@ -120,10 +121,17 @@ Sonuç: `.NET` build 0/0, UI `tsc` + `vite build` temiz, Python import temiz.
 
 **Oturum dersleri:** (1) Yarım geçiş: PUT eski format yazınca GET .json'u marker sanıp 500 verdi → 2c çözdü. (2) Kestrel senkron I/O yasağı → PUT `async`+`ReadToEndAsync`. (3) tsc geçmeden frontend "uygulanmış" sayılmaz (unused import → vite build çalışmadı). **Her frontend prompt'unda `npm run build` şart.**
 
-### 2e — Raw text + Reset + Cleanup global `🔵`
-**Neden (regresyon):** GET tek `content` (reviewed-öncelikli) dönüyor; frontend raw+edited'i ondan türetiyor → raw orijinali değil reviewed'ı gösteriyor + cleanup global scope'unu yitirdi.
-**Hedef model:** Raw (orijinal, `sections/{id}.json`) = kalıcı, raw panel + Reset kullanır. Edited (`reviewed/{id}.json`) = düzenlenmiş. GET iki içerik: `raw_pages` + `pages`. Reset reviewed'ı silip edited'i raw'a döndürür. Cleanup tüm kitaba (section-list checkbox + global apply). Ölü `content`/`parsePages` bu turda temizlenir.
-**Not:** Üçü aynı veri modelini paylaştığı için tek tasarım turu. Kararlar (cleanup nerede saklanır, raw GET'te ayrı alan, checkbox UI) tur başında netleşir.
+### 2e — Raw text + Reset + Cleanup global `✅`
+**Çözülen regresyon:** GET tek `content` dönüyordu, frontend raw+edited'i ondan türetince raw paneli reviewed'ı gösteriyordu. Çözüm: GET artık `raw_pages` (her zaman `sections/{id}.json`, orijinal) + `pages` (reviewed-öncelikli) ayrı döner; frontend `leftPages=raw_pages`, `rightPages=pages`.
+**Global cleanup (yeni yetenek, eskiden yoktu):** Cleanup match mantığı saf `applyPatternsToPages`'e çıkarıldı (tek kaynak, TS). `POST sections/bulk-save` birden çok section'ı yazar ama Status'a dokunmaz (section'lar açılıp kaydedilene kadar "extracted" kalır). SectionList'e çoklu seçim (checkbox + tümünü seç). Orchestration: seçili section'ları çek → saf fonksiyon → tek bulk-save → reload. Backend match mantığı içermez (ikizleme yok).
+**Karar:** Kitap-geneli cleanup tek-seferlik (kalıcı pattern saklanmaz) — kitap bir kez yüklenip section'lara bölündüğü için yeterli.
+
+### 2f — Review UX cilası `✅`
+**Scoped delete:** Satır-içi "Delete" butonu mini popover açar: "Bu bölümden sil" (in-memory) / "Tüm kitaptan sil" (disk-bazlı, exact-match, tüm section'lar). Popover viewport-clamp'li (kenarda taşmıyor).
+**Scoped reset:** Toolbar "Reset" dropdown: "Bu bölümü resetle" / "Tüm kitabı resetle" (ikinci onay adımı — yıkıcı). `DELETE sections/reviewed-all` tüm reviewed json'ları siler, kitabı raw'a döndürür.
+**Tutarlılık dersi:** Reset'ler `ReviewedPath`'e değil **dosya varlığına** bakmalı — global cleanup ReviewedPath'i null bırakıp reviewed json yazıyor, GET dosya varlığıyla okuyor; reset de aynı temele oturtuldu yoksa cleanup-only section'lar atlanıyordu.
+**Custom-match dersi:** `applyPatternsToPages` pattern metnini de trim'lemeli (satır metni zaten trim'li) — trim'siz pattern sessizce hiçbir şey eşleştirmiyordu (bulk-save 200 ama silmiyordu).
+**Diğer:** Panel section açıkken her zaman görünür (boş-durumda mesaj + custom alanı), ilk section otomatik seçili gelir, buton/dialog görsel birliği (tekil=nötr+Trash2, çoklu=amber+Layers).
 
 ---
 
@@ -249,19 +257,16 @@ değiştirme/yeniden çalıştırma, eksik bağımlılık KURMA."*
 
 ## Sıradaki Adım
 
-**Faz 2e — Raw text + Reset + Cleanup global.**
-PageContent[] geçişi (2.0–2d) tamam ve commit edildi: extract→json, GET
-migration-aware, PUT yapısal, frontend load yapısal. Save/approve/load çalışıyor.
+**Faz 2 (review) tamamlandı** — PageContent[] geçişi (2.0–2d), raw/reset/cleanup-global (2e)
+ve UX cilası (2f) bitti, commit edildi. Review pipeline'ı fonksiyonel, cilalı ve tutarlı.
 
 Ertelenenler: 1.2b (ses işleme), B4 (TextProcessor Exe→Library), B6 (çift istek),
 B7 (Pyrefly kozmetik).
 
-Sıradaki: 2e ile iki regresyonu düzelt (raw text orijinali göstermiyor, cleanup
-global scope'unu yitirdi) + Reset'i doğru raw kaynağına bağla. GET raw/edited'i
-ayrı versin (`raw_pages` + `pages`), cleanup tüm kitaba uygulansın. Ölü `content`/
-`parsePages` kalıntıları temizlenir.
-
-2e kapanınca → **Faz 3 Render Orkestrasyonu:** ffmpeg ön-koşul → ChunkEntry şema
-tamamla → ChunkBuilderService → Chunk CRUD → RenderJob → merge/mp3/SRT → Render UI.
+**Sıradaki: Faz 3 — Render Orkestrasyonu** (asıl ürün değeri). Sıra:
+ffmpeg ön-koşul (3.0) → ChunkEntry şema tamamla: PageStart/PageEnd + ChunkStatus enum (3.1)
+→ ChunkBuilderService .NET + POST /chunk (3.2) → Chunk CRUD (3.3) → RenderJob: sıralı
+render + SignalR + resume (3.4) → /render PCM_S16 + süre + .NET audio yazımı (3.5) →
+merge/mp3/SRT (3.6) → Render UI (3.7).
 
 Prompt öncesi güncel repomix yüklenir ve son sprint izleri grep'le doğrulanır.
