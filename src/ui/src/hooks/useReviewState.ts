@@ -43,6 +43,14 @@ export function useReviewState(slug: string | undefined) {
     enabled: !!slug,
   })
 
+  // Auto-select the first section once the manifest loads, so the page opens
+  // with the first section (and its cleanup panel) ready — no click required.
+  useEffect(() => {
+    if (!selectedId && manifest?.sections && manifest.sections.length > 0) {
+      setSelectedId(manifest.sections[0].id)
+    }
+  }, [manifest, selectedId])
+
   // Section content
   const { data: sectionData, isLoading: sectionLoading } = useQuery({
     queryKey: ['section', slug, selectedId],

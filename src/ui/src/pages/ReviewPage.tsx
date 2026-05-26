@@ -49,7 +49,9 @@ export default function ReviewPage() {
   const rightWindow = getPageWindow(rightPages, activePageIndex)
 
   // Resizable cleanup panel height
-  const [cleanupHeight, setCleanupHeight] = useState(280)
+  const [cleanupHeight, setCleanupHeight] = useState(
+    Math.round(window.innerHeight * 0.45)
+  )
   const [selectedSectionIds, setSelectedSectionIds] = useState<Set<string>>(
     new Set()
   )
@@ -77,6 +79,22 @@ export default function ReviewPage() {
       applyCleanupGlobal(selected, custom, Array.from(selectedSectionIds))
     },
     [applyCleanupGlobal, selectedSectionIds]
+  )
+
+  const handleDeletePattern = useCallback(
+    (pattern: string, scope: 'section' | 'book') => {
+      if (scope === 'book') {
+        // Apply this exact text to ALL sections (disk-based, reuses global cleanup).
+        applyCleanupGlobal(
+          [],
+          [{ id: `del-${Date.now()}`, text: pattern, matchType: 'exact', checked: true }],
+          sections.map(s => s.id)
+        )
+      } else {
+        deletePatternGlobal(pattern)
+      }
+    },
+    [applyCleanupGlobal, deletePatternGlobal, sections]
   )
   const dragRef = useRef<{ startY: number; startH: number } | null>(null)
 
@@ -125,8 +143,7 @@ export default function ReviewPage() {
           />
         </div>
 
-        {selectedId && !sectionLoading && sectionData &&
-          (sectionData.detected_patterns?.length ?? 0) > 0 && (
+        {selectedId && !sectionLoading && sectionData && (
             <>
               {/* Drag handle */}
               <div
@@ -142,7 +159,8 @@ export default function ReviewPage() {
               <div className="shrink-0 overflow-hidden"
                    style={{ height: cleanupHeight }}>
                 <CleanupPanel
-                  patterns={sectionData.detected_patterns}
+                  key={selectedId}
+                  patterns={sectionData.detected_patterns ?? []}
                   onApply={applyCleanup}
                   onApplyGlobal={handleApplyGlobal}
                   selectedSectionCount={selectedSectionIds.size}
@@ -282,7 +300,7 @@ export default function ReviewPage() {
                             absoluteIndex={absoluteIndex}
                             onToggleLine={toggleLine}
                             onApplyDelete={applyDelete}
-                            onDeletePattern={deletePatternGlobal}
+                            onDeletePattern={handleDeletePattern}
                             onDeletePage={deletePage}
                             previewIds={previewIds}
                             onPageFocus={setActivePageIndex}

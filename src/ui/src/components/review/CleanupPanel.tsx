@@ -4,7 +4,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
   ChevronDown, ChevronUp,
-  Trash2, RotateCcw
+  Trash2, RotateCcw, Layers
 } from 'lucide-react'
 
 export type PatternSelection = {
@@ -184,6 +184,11 @@ export function CleanupPanel({
 
       {/* Scrollable accordion list */}
       <div className="overflow-y-auto flex-1 min-h-0">
+        {patterns.length === 0 && (
+          <p className="px-3 py-3 text-xs text-muted-foreground">
+            Tekrar eden içerik bulunamadı. Aşağıdan özel bir desen ekleyebilirsiniz.
+          </p>
+        )}
         {groups.map(group => group.items.length === 0 ? null : (
           <div key={group.key}>
 
@@ -299,17 +304,19 @@ export function CleanupPanel({
 
       {/* Apply button — always visible, outside scroll */}
       <div className="px-3 py-2 border-t shrink-0">
-        <Button size="sm" className="w-full text-xs"
+        <Button size="sm" variant="outline" className="w-full text-xs"
           onClick={handleApply} disabled={selectedCount === 0}>
           <Trash2 size={11} className="mr-1" />
-          Apply ({selectedCount})
+          Bu bölüme uygula ({selectedCount})
         </Button>
-        <Button size="sm" variant="secondary"
-          className="w-full text-xs mt-1.5"
+        <Button size="sm" variant="outline"
+          className="w-full text-xs mt-1.5 border-amber-500/50
+                     text-amber-700 dark:text-amber-400
+                     hover:bg-amber-500/10"
           onClick={handleApplyGlobal}
           disabled={selectedCount === 0 || selectedSectionCount === 0}>
-          <Trash2 size={11} className="mr-1" />
-          Seçili bölümlere uygula ({selectedSectionCount})
+          <Layers size={11} className="mr-1" />
+          {selectedSectionCount} bölüme uygula
         </Button>
       </div>
     </div>

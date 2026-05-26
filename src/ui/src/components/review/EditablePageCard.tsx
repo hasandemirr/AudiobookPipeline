@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Trash2 } from 'lucide-react'
+import { Trash2, Layers } from 'lucide-react'
 import type { PageBlock } from '../../lib/pageUtils'
 import {
   LineActionMenu,
@@ -19,7 +19,7 @@ interface EditablePageProps {
     lineText: string,
     scope: DeleteScope
   ) => void
-  onDeletePattern: (pattern: string) => void
+  onDeletePattern: (pattern: string, scope: 'section' | 'book') => void
   onDeletePage: (pageNumber: number) => void
   onPageFocus: (absoluteIndex: number) => void
 }
@@ -35,6 +35,10 @@ export function EditablePage({
   onDeletePage,
   onPageFocus,
 }: EditablePageProps) {
+  const [deletePrompt, setDeletePrompt] = useState<{
+    x: number; y: number; text: string
+  } | null>(null)
+
   const [menu, setMenu] = useState<{
     x: number; y: number
     lineId: string
@@ -144,21 +148,78 @@ export function EditablePage({
                 <button
                   onClick={e => {
                     e.stopPropagation()
-                    onDeletePattern(line.text)
+                    const PW = 200
+                    const PH = 140
+                    const pad = 8
+                    const x = Math.min(
+                      e.clientX,
+                      window.innerWidth - PW - pad
+                    )
+                    const y = Math.min(
+                      e.clientY,
+                      window.innerHeight - PH - pad
+                    )
+                    setDeletePrompt({
+                      x: Math.max(pad, x),
+                      y: Math.max(pad, y),
+                      text: line.text,
+                    })
                   }}
                   className="opacity-0 group-hover:opacity-100
                              text-xs text-muted-foreground
                              hover:text-destructive shrink-0
                              transition-opacity"
-                  title="Delete from all pages"
+                  title="Delete options"
                 >
-                  Delete all
+                  Delete
                 </button>
               )}
             </div>
           )
         )}
       </div>
+      {deletePrompt && (
+        <>
+          <div
+            className="fixed inset-0 z-40"
+            onClick={() => setDeletePrompt(null)}
+          />
+          <div
+            className="fixed z-50 bg-popover border rounded-md shadow-md
+                       text-xs overflow-hidden min-w-[180px]"
+            style={{ left: deletePrompt.x, top: deletePrompt.y }}
+          >
+            <div className="px-3 py-1.5 border-b text-muted-foreground
+                            font-mono truncate max-w-[220px]">
+              "{deletePrompt.text}"
+            </div>
+            <button
+              className="w-full text-left px-3 py-2 hover:bg-muted
+                         transition-colors flex items-center gap-2"
+              onClick={() => {
+                onDeletePattern(deletePrompt.text, 'section')
+                setDeletePrompt(null)
+              }}
+            >
+              <Trash2 size={12} className="shrink-0" />
+              Bu bölümden sil
+            </button>
+            <button
+              className="w-full text-left px-3 py-2 transition-colors
+                         flex items-center gap-2 text-amber-700
+                         dark:text-amber-400 hover:bg-amber-500/10"
+              onClick={() => {
+                onDeletePattern(deletePrompt.text, 'book')
+                setDeletePrompt(null)
+              }}
+            >
+              <Layers size={12} className="shrink-0" />
+              Tüm kitaptan sil
+            </button>
+          </div>
+        </>
+      )}
+
       {menu && (
         <LineActionMenu
           x={menu.x}
