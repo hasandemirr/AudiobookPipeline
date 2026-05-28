@@ -63,6 +63,9 @@ public class PathService
     public string ManifestPath(string slug) =>
         Path.Combine(BookDir(slug), "manifest.json");
 
+    public string RenderManifestPath(string slug) =>
+        Path.Combine(BookDir(slug), "render.json");
+
     public string SectionsDir(string slug) =>
         Path.Combine(BookDir(slug), "sections");
 

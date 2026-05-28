@@ -64,6 +64,36 @@ export interface Section {
   detected_patterns: DetectedPattern[]
 }
 
+export interface RenderChunk {
+  id: string
+  section_id: string
+  order: number
+  text: string
+  char_count: number
+  page_start: number
+  page_end: number
+  status: string  // pending | rendering | done | failed | stale
+  audio_path?: string | null
+  audio_duration_sec?: number | null
+  subtitle_start_ms?: number | null
+  subtitle_end_ms?: number | null
+  is_long: boolean
+  retries: number
+}
+
+export interface RenderManifest {
+  book: string
+  created_at: string
+  updated_at: string
+  render_status: string  // idle | chunking | rendering | done | failed
+  chunks: RenderChunk[]
+  output: {
+    merged_path?: string | null
+    format?: string | null
+    srt_path?: string | null
+  }
+}
+
 export interface BookManifest {
   book: string
   created_at: string
@@ -186,6 +216,15 @@ export const api = {
       `${BASE}/books/${slug}/output`,
       { method: 'DELETE' }
     ),
+
+  chunkBook: (slug: string) =>
+    request<{ existing: boolean; chunk_count: number }>(
+      `${BASE}/books/${slug}/chunk`,
+      { method: 'POST' }
+    ),
+
+  getRender: (slug: string) =>
+    request<RenderManifest>(`${BASE}/books/${slug}/render`),
 
   resetSection: (slug: string, id: string) =>
     request<{ id: string; status: string }>(

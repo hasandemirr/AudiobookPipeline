@@ -19,6 +19,8 @@ public static class SectionEndpoints
             ResetSection);
         app.MapDelete("/api/books/{slug}/sections/reviewed-all",
             ResetAllSections);
+        app.MapPost("/api/books/{slug}/chunk", ChunkBook);
+        app.MapGet("/api/books/{slug}/render", GetRender);
     }
 
     private static async Task<IResult> GetSection(
@@ -367,6 +369,100 @@ public static class SectionEndpoints
         svc.Save(manifestPath, manifest);
 
         return Results.Ok(new { reset = resetIds });
+    }
+
+    // "Kitabı Seslendir" trigger. If render.json already exists, do nothing and
+    // report existing=true (frontend just opens the render page, preserving any
+    // prior render state). Otherwise: approve ALL sections, then build chunks
+    // for narrate=true sections (book-ordered), and create render.json.
+    private static IResult ChunkBook(
+        string slug,
+        PathService paths, ManifestService svc,
+        RenderService render, ChunkBuilderService chunker)
+    {
+        if (!paths.ManifestExists(slug))
+            return Results.NotFound(new { message = $"{slug} not found." });
+
+        var renderPath = paths.RenderManifestPath(slug);
+        if (render.Exists(renderPath))
+        {
+            // Already chunked — preserve existing render state, just signal open.
+            var existing = render.Load(renderPath);
+            return Results.Ok(new
+            {
+                existing = true,
+                chunkCount = existing.Chunks.Count,
+            });
+        }
+
+        var manifestPath = paths.ManifestPath(slug);
+        var manifest = svc.Load(manifestPath);
+
+        // Approve every section that isn't already approved.
+        foreach (var section in manifest.Sections)
+        {
+            if (section.Status != "approved")
+                section.Status = "approved";
+        }
+        svc.Save(manifestPath, manifest);
+
+        // Build chunks for narrate=true sections, in manifest order, with a
+        // running book-wide Order. Read reviewed pages (reviewed json if present,
+        // else section json) — same precedence as GET.
+        var allChunks = new List<ChunkEntry>();
+        var order = 0;
+        foreach (var section in manifest.Sections)
+        {
+            if (!section.Narrate) continue;
+
+            var txtFile = Path.GetFileName(
+                !string.IsNullOrEmpty(section.ReviewedPath)
+                    ? section.ReviewedPath
+                    : section.TxtPath);
+            var reviewedJson = paths.ReviewedJsonPath(slug, txtFile);
+            var sectionJson  = paths.SectionJsonPath(slug, txtFile);
+
+            List<PageContent> pages;
+            if (File.Exists(reviewedJson))
+                pages = svc.LoadPages(reviewedJson);
+            else if (File.Exists(sectionJson))
+                pages = svc.LoadPages(sectionJson);
+            else
+                continue; // no content for this section
+
+            var chunks = chunker.BuildForSection(section.Id, pages, order);
+            allChunks.AddRange(chunks);
+            order += chunks.Count;
+        }
+
+        var renderManifest = new RenderManifest
+        {
+            Book = slug,
+            CreatedAt = DateTime.Now.ToString("o"),
+            RenderStatus = "idle",
+            Chunks = allChunks,
+        };
+        render.Save(renderPath, renderManifest);
+
+        return Results.Ok(new
+        {
+            existing = false,
+            chunkCount = allChunks.Count,
+        });
+    }
+
+    // Return the render manifest (chunks + render status). 404 if not yet chunked.
+    private static IResult GetRender(
+        string slug, PathService paths, RenderService render)
+    {
+        if (!paths.ManifestExists(slug))
+            return Results.NotFound(new { message = $"{slug} not found." });
+
+        var renderPath = paths.RenderManifestPath(slug);
+        if (!render.Exists(renderPath))
+            return Results.NotFound(new { message = "Not chunked yet." });
+
+        return Results.Ok(render.Load(renderPath));
     }
 
     // Page marker parse — "=== SAYFA N ===" formatı

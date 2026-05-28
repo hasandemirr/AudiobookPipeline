@@ -16,7 +16,7 @@ public static class BookEndpoints
     }
 
     private static IResult ListBooks(
-        PathService paths, ManifestService svc)
+        PathService paths, ManifestService svc, RenderService render)
     {
         if (!Directory.Exists(paths.WorkspaceDir))
             return Results.Ok(Array.Empty<object>());
@@ -44,7 +44,7 @@ public static class BookEndpoints
                     sectionCount = manifest.Sections.Count,
                     approvedCount = manifest.Sections
                         .Count(s => s.Status == "approved"),
-                    chunkCount = manifest.Chunks.Count,
+                    chunkCount = ReadChunkCount(paths, render, slug),
                     hasManifest = true
                 };
             })
@@ -168,5 +168,13 @@ public static class BookEndpoints
             message = $"{deleted.Count} output file(s) deleted.",
             deleted
         });
+    }
+
+    private static int ReadChunkCount(
+        PathService paths, RenderService render, string slug)
+    {
+        var renderPath = paths.RenderManifestPath(slug);
+        if (!render.Exists(renderPath)) return 0;
+        return render.Load(renderPath).Chunks.Count;
     }
 }

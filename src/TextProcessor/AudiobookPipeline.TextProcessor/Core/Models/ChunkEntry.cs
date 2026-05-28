@@ -4,13 +4,22 @@ public class ChunkEntry
 {
     public string Id { get; set; } = string.Empty;
 
-    // Chunk text lives in the manifest (single source of truth).
+    // Which section this chunk came from (book-wide list is ordered via Order).
+    public string SectionId { get; set; } = string.Empty;
+
+    // Sequential order across the whole book (render + merge follow this).
+    public int Order { get; set; }
+
+    // Chunk text lives in render.json (the render manifest is its source of truth).
     public string Text { get; set; } = string.Empty;
 
     public int CharCount { get; set; }
 
-    // pending | done | failed
-    public string Status { get; set; } = "pending";
+    // Page span this chunk covers (may cross pages for sentence integrity).
+    public int PageStart { get; set; }
+    public int PageEnd { get; set; }
+
+    public ChunkStatus Status { get; set; } = ChunkStatus.Pending;
 
     // Rendered audio file (workspace/{slug}/audio/{id}.wav); null until rendered.
     public string? AudioPath { get; set; }

@@ -2,6 +2,9 @@ import { useState, useRef, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useReviewState } from '../hooks/useReviewState'
 import { getPageWindow } from '../lib/pageUtils'
+import { useMutation } from '@tanstack/react-query'
+import { toast } from 'sonner'
+import { api } from '../lib/api'
 import { SectionList } from '../components/review/SectionList'
 import { ReviewToolbar } from '../components/review/ReviewToolbar'
 import { RawPage } from '../components/review/RawPageCard'
@@ -45,6 +48,17 @@ export default function ReviewPage() {
     deletePatternGlobal,
     deletePage,
   } = useReviewState(slug)
+
+  const chunkBookMutation = useMutation({
+    mutationFn: () => api.chunkBook(slug!),
+    onSuccess: () => {
+      navigate(`/render/${slug}`)
+    },
+    onError: (err) => {
+      const message = err instanceof Error ? err.message : 'Chunking failed.'
+      toast.error(message)
+    },
+  })
 
   const leftWindow = getPageWindow(leftPages, activePageIndex)
   const rightWindow = getPageWindow(rightPages, activePageIndex)
@@ -193,6 +207,7 @@ export default function ReviewPage() {
               isApproving={approveMutation.isPending}
               onSave={() => saveMutation.mutate()}
               onApprove={() => approveMutation.mutate()}
+              onNarrateBook={() => chunkBookMutation.mutate()}
               onNarrate={() => narrateMutation.mutate()}
               onExport={async () => {
                 if (isDirty) {

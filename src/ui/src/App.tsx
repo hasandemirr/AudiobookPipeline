@@ -3,6 +3,7 @@ import { BookOpen, Settings, Mic } from 'lucide-react'
 import Dashboard from './pages/Dashboard'
 import ReviewPage from './pages/ReviewPage'
 import SettingsPage from './pages/SettingsPage'
+import RenderPage from './pages/RenderPage'
 
 export default function App() {
   return (
@@ -45,6 +46,7 @@ export default function App() {
         <Routes>
           <Route path="/" element={<Dashboard />} />
           <Route path="/review/:slug" element={<ReviewPage />} />
+          <Route path="/render/:slug" element={<RenderPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/tts" element={
             <div className="p-8 text-muted-foreground">

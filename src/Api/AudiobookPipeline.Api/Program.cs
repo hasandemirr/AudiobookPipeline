@@ -30,9 +30,13 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 builder.Services.AddSingleton<PathService>();
 builder.Services.AddSingleton<ManifestService>();
+builder.Services.AddSingleton<AudiobookPipeline.TextProcessor.Core.Services.RenderService>();
+builder.Services.AddSingleton<ChunkBuilderService>();
 
 builder.Services.Configure<ExtractConfig>(
     builder.Configuration.GetSection("Extract"));
+builder.Services.Configure<ChunkConfig>(
+    builder.Configuration.GetSection("Chunk"));
 
 // Named HttpClient for the Python TTS service (port 5001). Long timeout: render can be slow.
 builder.Services.AddHttpClient("tts", (sp, client) =>

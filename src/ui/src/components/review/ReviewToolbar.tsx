@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import {
   Save, Check, Volume2, VolumeX,
-  ChevronLeft, ChevronRight, Download, RotateCcw
+  ChevronLeft, ChevronRight, Download, RotateCcw, Headphones
 } from 'lucide-react'
 import { formatRelativeTime } from '../../lib/pageUtils'
 import type { Section } from '../../lib/api'
@@ -20,6 +20,7 @@ interface Props {
   isApproving: boolean
   onSave: () => void
   onApprove: () => void
+  onNarrateBook: () => void
   onNarrate: () => void
   onExport: () => void
   onPrev: () => void
@@ -43,7 +44,7 @@ const statusLabel = (status: string) => {
 export function ReviewToolbar({
   currentSection, currentIndex, sectionsLength,
   isDirty, lastSaved, isSaving, isApproving,
-  onSave, onApprove, onNarrate, onExport, onPrev, onNext, onReset, onResetAll,
+  onSave, onApprove, onNarrate, onNarrateBook, onExport, onPrev, onNext, onReset, onResetAll,
 }: Props) {
   const [resetMenu, setResetMenu] = useState(false)
   const [confirmAll, setConfirmAll] = useState(false)
@@ -179,6 +180,12 @@ export function ReviewToolbar({
             currentSection?.status === 'approved'}>
           <Check size={13} className="mr-1" />
           Approve
+        </Button>
+
+        <Button size="sm" variant="secondary"
+          onClick={onNarrateBook}>
+          <Headphones size={13} className="mr-1" />
+          Kitabı Seslendir
         </Button>
 
         <Button variant="ghost" size="sm"
