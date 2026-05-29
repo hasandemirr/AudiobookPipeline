@@ -137,19 +137,19 @@ Sonuç: `.NET` build 0/0, UI `tsc` + `vite build` temiz, Python import temiz.
 
 ## FAZ 3 — Render Orkestrasyonu (asıl ürün değeri)
 
-> Bir kitabı uçtan uca seslendir. Eski 3.4+4.1+4.2 birleşimi, öne çekildi.
-> PageContent[] (Faz 2) zemin. Önce varsayılan ses, sonra referans-ses.
+> Render veri modeli + chunk üretimi + minimal görünüm tamamlandı (3.1–3.3b-1, commit'li).
+> **Mimari dönüş:** Render artık PDF-review context'ine bağlı DEĞİL. Ayrı bir
+> **Audiobook Context** (Faz 3.5) olarak yeniden yapılandırıldı — bkz aşağı.
+> Chunk çekirdeği (ChunkBuilderService, ChunkStatus, RenderManifest, RenderService)
+> audiobook context'inde aynen yeniden kullanılır.
 
 | Sprint | İş | Durum |
 |--------|-----|-------|
-| **3.0** | ffmpeg ön-koşul — setup'a kontrol (mp3/format encode) | ⬜ |
-| **3.1** | `ChunkEntry` şema tamamla: `PageStart`/`PageEnd` + `ChunkStatus` enum {Pending,Rendering,Done,Failed,Stale} | ⬜ |
-| **3.2** | ChunkBuilderService (.NET) + `POST /api/books/{slug}/chunk` (PageContent[]→page-aware chunk) | ⬜ |
-| **3.3** | Chunk CRUD — GET / PUT (done→stale) / DELETE (rendering→lock, done→soft-delete) | ⬜ |
-| **3.4** | RenderJob (BackgroundTaskQueue) — sıralı render, SignalR progress, resume, hata→dur | ⬜ |
-| **3.5** | `/render` PCM_S16 wav + süre header; .NET `audio/{id}.wav` yazar + manifest günceller | ⬜ |
-| **3.6** | Merge + mp3/format çıktı (ffmpeg, UI'dan format) + SRT (chunk süresi = altyazı süresi) | ⬜ |
-| **3.7** | Render UI (chunk listesi page badge + cross-page uyarı, dinle/sil/yeniden-üret, progress, duraklat/durdur/devam) | ⬜ |
+| **3.1** | Render veri modeli: `RenderManifest`+`RenderService` (ayrı render.json, kendi lock), `ChunkStatus` enum, `ChunkEntry` şema tamamla (SectionId/Order/PageStart/PageEnd), `BookManifest.Chunks` kaldır | ✅ |
+| **3.2** | ChunkBuilderService (.NET) — cümle-atomik ≤MaxChars (ayarlanabilir 280) paketleme, uzun cümle noktalama böl (`IsLong`) | ✅ |
+| **3.3a** | `POST /api/books/{slug}/chunk` — tüm section approve + narrate chunk + render.json oluştur (idempotent) | ✅ |
+| **3.3b-1** | `GET /render` + `/render/:slug` route + minimal RenderPage (section-gruplu chunk görünümü) | ✅ |
+| **3.4–3.7** | RenderJob / audio / merge / SRT / tam Render UI — **Faz 3.5 Audiobook Context'e DEVREDİLDİ** (aşağı bkz) | ➡️ |
 
 **Kilitli kararlar:**
 - Chunk'layıcı .NET (C#). Cümle korunarak ≤280 char; aşarsa virgül→`"`→boşluk böl, `IsLong=true`. Same-page-preferred (gerekirse `PageStart`/`PageEnd` ile sayfa aşılır).
@@ -159,6 +159,50 @@ Sonuç: `.NET` build 0/0, UI `tsc` + `vite build` temiz, Python import temiz.
 - Ara chunk wav (16-bit PCM, çalınabilir) → merge → mp3 (UI'dan format). ffmpeg ön-koşul.
 - SRT: chunk'ın tüm metni render süresi kadar (render yan ürünü, ayrı hizalama yok).
 - `audio_prompt_path` opsiyonel (varsayılan ses). Klonlama = zero-shot, eğitim YOK; 1.2b + 5.3 ile eklenir (tüketim ucu hazır).
+
+---
+
+## FAZ 3.5 — Audiobook Context (mimari dönüş)
+
+> PDF-extract ile audiobook İKİ AYRI context. Geçiş yalnızca sol navbar'dan.
+> PDF-extract: PDF → temizlenmiş/approve TXT (review pipeline sonu). Audiobook:
+> hazır TXT → chunk → render → merge. Audiobook kendi entity'si (M1), kaynaktan
+> snapshot (K1) — kaynak değişimi audiobook'u ETKİLEMEZ.
+
+**Kilitli mimari kararlar:**
+- **M1** — Audiobook ayrı entity, kendi slug'ı, kendi storage'ı (`audiobooks/{slug}/`).
+- **K1** — Snapshot, sıfır canlı bağ. Kitaptan audiobook üretilince içerik kopyalanır; kaynak sonradan değişse audiobook etkilenmez.
+- **T3** — İki girdi: (a) sistemdeki approve kitaplardan seç, (b) doğrudan txt yükle. Txt'de sayfa yok → `PageStart/PageEnd` nullable, veri yoksa UI'da gösterilmez.
+- **B1** — Sıkı sınır. "Kitabı Seslendir" butonu review'dan KALKAR. Context geçişi yalnız navbar.
+- Slug: kütüphaneden → `{kitap-slug}-audio`, txt'den → `{txt-adı}-audio` (default öneri, düzenlenebilir; çakışma → `(1)`,`(2)`).
+- Storage: `audiobooks/{slug}/audiobook.json` (meta) + `chunks.json` (chunk'lar) + `audio/` + `output/`.
+- Model: `RenderManifest` genişletilir (source_type [pdf|txt], source_ref, title) — yeni model değil.
+- Chunk içeriği `List<PageContent>`'e normalize (pdf→reviewed pages kopyası; txt→düz metin, page null).
+- Audiobook oluşurken tek-sefer chunk'lanır; sonradan ayrı "yeniden chunk'la" eylemi (idempotent koruma kalkar).
+
+| Sprint | İş | Durum |
+|--------|-----|-------|
+| **3.5.1** | Audiobook veri modeli + storage: `AudiobookManifest`/genişletilmiş RenderManifest, `AudiobookService` (audiobooks/ load/save/list), PathService audiobook path'leri, slug üretimi+çakışma | ⬜ |
+| **3.5.2** | Audiobook oluşturma (backend): kitaptan (reviewed snapshot→chunk) + txt'den (normalize→chunk). ChunkBuilderService yeniden kullanılır | ⬜ |
+| **3.5.3** | Sol navbar "Audiobooks" sekmesi + AudiobookLibrary (kart listesi) + "Yeni Audiobook" dialog (PDF seç / txt yükle) | ⬜ |
+| **3.5.4** | AudiobookDetail sayfası (görünüm): chunk kutuları, section-gruplu soldan-sağa grid, üst meta (chunk sayısı, sayfa aralığı) | ⬜ |
+| **3.5.5** | Chunk edit: textarea + blur-save + canlı sayaç + PUT + Done→Stale | ⬜ |
+| **3.5.6** | RenderJob (BackgroundTaskQueue) — sıralı render, SignalR progress, resume, hata→dur; `/render` PCM_S16+süre header; .NET `audio/{id}.wav` yazar | ⬜ |
+| **3.5.7** | Yeniden render (tek chunk) + chunk ekle/çıkar (CRUD) | ⬜ |
+| **3.5.8** | ffmpeg ön-koşul + merge + mp3/format + SRT (chunk süresi = altyazı) | ⬜ |
+| **3.5.9** | Atıl kod temizliği (aşağıdaki envanter) | ⬜ |
+
+**Silinecek/taşınacak atıl kod envanteri (her sprint'te ilgili parça temizlenir):**
+- ReviewToolbar: "Kitabı Seslendir" butonu + `onNarrateBook` prop + `Headphones` import (B1).
+- ReviewPage: `chunkBookMutation`.
+- App.tsx: `/render/:slug` route → audiobook route'una taşınır/silinir.
+- RenderPage.tsx: AudiobookDetail'e evrilir; eski silinir.
+- SectionEndpoints: `ChunkBook` (POST /chunk) + `GetRender` (GET /render) → audiobook endpoint'lerine taşınır, eskiler silinir.
+- api.ts: `chunkBook`, `getRender` → audiobook fonksiyonlarına dönüşür; `BookSummary.chunk_count` book context'inde anlamsız (kalkar/gizlenir).
+- BookEndpoints: `ReadChunkCount` / `chunk_count` book özetinden kalkar.
+- PathService: `RenderManifestPath` (`workspace/{slug}/render.json`) → audiobook storage'ına taşınır.
+
+**Kalıcı çekirdek (DOKUNULMAZ, audiobook'ta yeniden kullanılır):** ChunkBuilderService, ChunkStatus, ChunkConfig, RenderManifest (genişletilir), RenderService, ChunkEntry.
 
 ---
 
@@ -263,10 +307,17 @@ ve UX cilası (2f) bitti, commit edildi. Review pipeline'ı fonksiyonel, cilalı
 Ertelenenler: 1.2b (ses işleme), B4 (TextProcessor Exe→Library), B6 (çift istek),
 B7 (Pyrefly kozmetik).
 
-**Sıradaki: Faz 3 — Render Orkestrasyonu** (asıl ürün değeri). Sıra:
-ffmpeg ön-koşul (3.0) → ChunkEntry şema tamamla: PageStart/PageEnd + ChunkStatus enum (3.1)
-→ ChunkBuilderService .NET + POST /chunk (3.2) → Chunk CRUD (3.3) → RenderJob: sıralı
-render + SignalR + resume (3.4) → /render PCM_S16 + süre + .NET audio yazımı (3.5) →
-merge/mp3/SRT (3.6) → Render UI (3.7).
+**Faz 3 render foundation tamam** (3.1 veri modeli, 3.2 ChunkBuilder, 3.3a chunk
+endpoint, 3.3b-1 minimal RenderPage — commit'li). **Mimari dönüş:** render artık
+ayrı bir **Audiobook Context** (Faz 3.5) — PDF-review'dan bağımsız, kendi entity'si
+(M1), snapshot (K1), iki girdi (kitap seç / txt yükle, T3), sıkı sınır (B1).
 
+**Sıradaki: Faz 3.5.1 — Audiobook veri modeli + storage.** AudiobookManifest
+(genişletilmiş RenderManifest: source_type/source_ref/title), AudiobookService
+(audiobooks/ load/save/list), PathService audiobook path'leri, slug üretimi+çakışma.
+Sonra 3.5.2 (oluşturma backend) → 3.5.3 (navbar+library+dialog) → 3.5.4 (detay görünüm)
+→ 3.5.5 (edit) → 3.5.6 (render) → 3.5.7 (re-render/CRUD) → 3.5.8 (merge/SRT) →
+3.5.9 (atıl kod temizliği).
+
+Atıl kod envanteri Faz 3.5 bölümünde — her sprint'te ilgili parça temizlenir.
 Prompt öncesi güncel repomix yüklenir ve son sprint izleri grep'le doğrulanır.

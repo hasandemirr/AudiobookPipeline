@@ -1,9 +1,11 @@
 import { Routes, Route, NavLink } from 'react-router-dom'
-import { BookOpen, Settings, Mic } from 'lucide-react'
+import { BookOpen, Settings, Mic, Headphones } from 'lucide-react'
 import Dashboard from './pages/Dashboard'
 import ReviewPage from './pages/ReviewPage'
 import SettingsPage from './pages/SettingsPage'
 import RenderPage from './pages/RenderPage'
+import AudiobookLibrary from './pages/AudiobookLibrary'
+import AudiobookDetail from './pages/AudiobookDetail'
 
 export default function App() {
   return (
@@ -20,6 +22,15 @@ export default function App() {
                 : 'hover:bg-muted'
             }`}>
           <BookOpen size={20} />
+        </NavLink>
+        <NavLink to="/audiobooks"
+          className={({isActive}) =>
+            `p-3 rounded-lg transition-colors ${
+              isActive
+                ? 'bg-primary text-primary-foreground'
+                : 'hover:bg-muted'
+            }`}>
+          <Headphones size={20} />
         </NavLink>
         <NavLink to="/settings"
           className={({isActive}) => 
@@ -47,6 +58,8 @@ export default function App() {
           <Route path="/" element={<Dashboard />} />
           <Route path="/review/:slug" element={<ReviewPage />} />
           <Route path="/render/:slug" element={<RenderPage />} />
+          <Route path="/audiobooks" element={<AudiobookLibrary />} />
+          <Route path="/audiobooks/:slug" element={<AudiobookDetail />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/tts" element={
             <div className="p-8 text-muted-foreground">

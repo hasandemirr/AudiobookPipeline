@@ -32,6 +32,7 @@ builder.Services.AddSingleton<PathService>();
 builder.Services.AddSingleton<ManifestService>();
 builder.Services.AddSingleton<AudiobookPipeline.TextProcessor.Core.Services.RenderService>();
 builder.Services.AddSingleton<ChunkBuilderService>();
+builder.Services.AddSingleton<AudiobookService>();
 
 builder.Services.Configure<ExtractConfig>(
     builder.Configuration.GetSection("Extract"));
@@ -88,6 +89,7 @@ app.UseSwaggerUI();
 
 BookEndpoints.Map(app);
 SectionEndpoints.Map(app);
+AudiobookEndpoints.Map(app);
 ExtractEndpoints.Map(app);
 ExportEndpoints.Map(app);
 TtsEndpoints.Map(app);

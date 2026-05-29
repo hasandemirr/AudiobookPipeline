@@ -16,8 +16,8 @@ public class ChunkEntry
     public int CharCount { get; set; }
 
     // Page span this chunk covers (may cross pages for sentence integrity).
-    public int PageStart { get; set; }
-    public int PageEnd { get; set; }
+    public int? PageStart { get; set; }
+    public int? PageEnd { get; set; }
 
     public ChunkStatus Status { get; set; } = ChunkStatus.Pending;
 

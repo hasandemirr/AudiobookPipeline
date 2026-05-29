@@ -29,7 +29,8 @@ public class ChunkBuilderService
     // Build chunks for one section. `startOrder` is the running book-wide order.
     // Returns the chunks; caller advances order by the returned count.
     public List<ChunkEntry> BuildForSection(
-        string sectionId, List<PageContent> pages, int startOrder)
+        string sectionId, List<PageContent> pages, int startOrder,
+        bool trackPages = true)
     {
         var sentences = new List<Sentence>();
         foreach (var page in pages)
@@ -61,8 +62,8 @@ public class ChunkBuilderService
                 Order = order,
                 Text = text,
                 CharCount = text.Length,
-                PageStart = bufStartPage,
-                PageEnd = bufEndPage,
+                PageStart = trackPages ? bufStartPage : (int?)null,
+                PageEnd = trackPages ? bufEndPage : (int?)null,
                 Status = ChunkStatus.Pending,
                 IsLong = false,
             });
@@ -88,8 +89,8 @@ public class ChunkBuilderService
                         Order = order,
                         Text = ptext,
                         CharCount = ptext.Length,
-                        PageStart = sentence.Page,
-                        PageEnd = sentence.Page,
+                        PageStart = trackPages ? sentence.Page : (int?)null,
+                        PageEnd = trackPages ? sentence.Page : (int?)null,
                         Status = ChunkStatus.Pending,
                         IsLong = true,
                     });

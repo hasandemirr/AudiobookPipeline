@@ -56,6 +56,13 @@ public class PathService
     public string WorkspaceDir => Path.Combine(_root, "workspace");
     public string OutputDir   => Path.Combine(_root, "output");
     public string PdfDir      => Path.Combine(_root, "assets", "raw_pdfs");
+    public string AudiobooksDir => Path.Combine(_root, "audiobooks");
+
+    public string AudiobookDir(string slug) => Path.Combine(AudiobooksDir, slug);
+    public string AudiobookManifestPath(string slug) => Path.Combine(AudiobookDir(slug), "audiobook.json");
+    public string AudiobookChunksPath(string slug) => Path.Combine(AudiobookDir(slug), "chunks.json");
+    public string AudiobookAudioDir(string slug) => Path.Combine(AudiobookDir(slug), "audio");
+    public string AudiobookOutputDir(string slug) => Path.Combine(AudiobookDir(slug), "output");
 
     public string BookDir(string slug) =>
         Path.Combine(WorkspaceDir, slug);

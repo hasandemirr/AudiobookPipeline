@@ -94,6 +94,15 @@ export interface RenderManifest {
   }
 }
 
+export interface AudiobookSummary {
+  slug: string
+  title: string
+  source_type: string  // pdf | txt
+  render_status: string
+  chunk_count: number
+  created_at: string
+}
+
 export interface BookManifest {
   book: string
   created_at: string
@@ -237,4 +246,27 @@ export const api = {
       `${BASE}/books/${slug}/sections/reviewed-all`,
       { method: 'DELETE' }
     ),
+
+  getAudiobooks: () =>
+    request<AudiobookSummary[]>(`${BASE}/audiobooks`),
+
+  createAudiobookFromBook: (bookSlug: string, title?: string) =>
+    request<{ slug: string; title: string; chunk_count: number }>(
+      `${BASE}/audiobooks/from-book`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ book_slug: bookSlug, title }),
+      }
+    ),
+
+  createAudiobookFromText: (file: File, title?: string) => {
+    const form = new FormData()
+    form.append('txt', file)
+    if (title) form.append('title', title)
+    return request<{ slug: string; title: string; chunk_count: number }>(
+      `${BASE}/audiobooks/from-text`,
+      { method: 'POST', body: form }
+    )
+  },
 }
