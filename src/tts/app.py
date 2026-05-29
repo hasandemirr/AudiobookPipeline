@@ -134,8 +134,9 @@ def render(req: RenderRequest):
         temperature=req.temperature,
     )
     buf = io.BytesIO()
-    ta.save(buf, wav, sr, format="wav")
-    return Response(content=buf.getvalue(), media_type="audio/wav")
+    ta.save(buf, wav, sr, format="wav", encoding="PCM_S", bits_per_sample=16)
+    duration_ms = round(wav.shape[-1] / sr * 1000)
+    return Response(content=buf.getvalue(), media_type="audio/wav", headers={"X-Audio-Duration-Ms": str(duration_ms)})
 
 
 if __name__ == "__main__":
