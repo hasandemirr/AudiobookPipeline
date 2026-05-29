@@ -15,12 +15,78 @@ public static class AudiobookEndpoints
     public static void Map(WebApplication app)
     {
         app.MapGet("/api/audiobooks", ListAudiobooks);
+        app.MapGet("/api/audiobooks/{slug}", GetAudiobook);
+        app.MapPut("/api/audiobooks/{slug}/chunks/{id}", UpdateChunk);
         app.MapPost("/api/audiobooks/from-book", CreateFromBook);
         app.MapPost("/api/audiobooks/from-text", CreateFromText);
     }
 
     private static IResult ListAudiobooks(AudiobookService audiobooks)
         => Results.Ok(audiobooks.List());
+
+    private static IResult GetAudiobook(
+        string slug, AudiobookService audiobooks)
+    {
+        if (!audiobooks.Exists(slug))
+            return Results.NotFound(new { message = $"{slug} not found." });
+
+        var manifest = audiobooks.LoadManifest(slug);
+        var chunks = audiobooks.LoadChunks(slug);
+        return Results.Ok(new { manifest, chunks });
+    }
+
+    // Update a single chunk's text. Recompute char_count. If the chunk was
+    // already rendered (Done), editing invalidates its audio → Stale.
+    private static async Task<IResult> UpdateChunk(
+        string slug, string id,
+        HttpRequest request,
+        AudiobookService audiobooks)
+    {
+        if (!audiobooks.Exists(slug))
+            return Results.NotFound(new { message = $"{slug} not found." });
+
+        var body = await new StreamReader(request.Body).ReadToEndAsync();
+        UpdateChunkBody? parsed;
+        try
+        {
+            parsed = System.Text.Json.JsonSerializer.Deserialize<UpdateChunkBody>(
+                body, JsonOpts);
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return Results.BadRequest(new { message = "Invalid payload." });
+        }
+        if (parsed?.Text is null)
+            return Results.BadRequest(new { message = "text required." });
+
+        var newText = parsed.Text;
+        var found = false;
+        ChunkEntry? updated = null;
+
+        await audiobooks.UpdateChunksAsync(slug, chunks =>
+        {
+            var chunk = chunks.FirstOrDefault(c => c.Id == id);
+            if (chunk is null) return Task.CompletedTask;
+            found = true;
+            chunk.Text = newText;
+            chunk.CharCount = newText.Length;
+            // Done audio no longer matches edited text → mark Stale.
+            if (chunk.Status == ChunkStatus.Done)
+                chunk.Status = ChunkStatus.Stale;
+            updated = chunk;
+            return Task.CompletedTask;
+        });
+
+        if (!found)
+            return Results.NotFound(new { message = $"chunk {id} not found." });
+
+        return Results.Ok(new
+        {
+            id = updated!.Id,
+            char_count = updated.CharCount,
+            status = updated.Status.ToString().ToLowerInvariant(),
+        });
+    }
 
     // Create an audiobook by snapshotting a book's edited content.
     // Includes only narrate=true sections; for each, reads the edited pages
@@ -79,6 +145,8 @@ public static class AudiobookEndpoints
                 continue;
 
             var chunks = chunker.BuildForSection(section.Id, pages, order, true);
+            foreach (var c in chunks)
+                c.SectionTitle = section.Title;
             allChunks.AddRange(chunks);
             order += chunks.Count;
         }
@@ -140,6 +208,8 @@ public static class AudiobookEndpoints
             new PageContent { PageNumber = 0, Text = content }
         };
         var chunks = chunker.BuildForSection("text", pages, 0, false);
+        foreach (var c in chunks)
+            c.SectionTitle = title;
 
         var audiobook = new AudiobookManifest
         {
@@ -165,6 +235,11 @@ public static class AudiobookEndpoints
     {
         public string? BookSlug { get; set; }
         public string? Title { get; set; }
+    }
+
+    private sealed class UpdateChunkBody
+    {
+        public string? Text { get; set; }
     }
 
     private static readonly System.Text.Json.JsonSerializerOptions JsonOpts = new()

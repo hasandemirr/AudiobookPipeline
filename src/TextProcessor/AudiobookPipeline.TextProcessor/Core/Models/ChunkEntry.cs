@@ -7,6 +7,10 @@ public class ChunkEntry
     // Which section this chunk came from (book-wide list is ordered via Order).
     public string SectionId { get; set; } = string.Empty;
 
+    // Snapshot of the source section's title (audiobook has no live link to the
+    // source book — K1 — so the title is copied at creation time).
+    public string SectionTitle { get; set; } = string.Empty;
+
     // Sequential order across the whole book (render + merge follow this).
     public int Order { get; set; }
 

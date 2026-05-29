@@ -36,6 +36,8 @@ public class AudiobookService
         _paths = paths;
     }
 
+    public bool Exists(string slug) => File.Exists(_paths.AudiobookManifestPath(slug));
+
     public AudiobookManifest LoadManifest(string slug)
     {
         var path = _paths.AudiobookManifestPath(slug);

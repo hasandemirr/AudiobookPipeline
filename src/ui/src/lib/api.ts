@@ -103,6 +103,42 @@ export interface AudiobookSummary {
   created_at: string
 }
 
+export interface AudiobookChunk {
+  id: string
+  section_id: string
+  section_title: string
+  order: number
+  text: string
+  char_count: number
+  page_start?: number | null
+  page_end?: number | null
+  status: string
+  audio_path?: string | null
+  audio_duration_sec?: number | null
+  is_long: boolean
+  retries: number
+}
+
+export interface AudiobookManifest {
+  slug: string
+  title: string
+  source_type: string
+  source_ref: string
+  created_at: string
+  updated_at: string
+  render_status: string
+  output: {
+    merged_path?: string | null
+    format?: string | null
+    srt_path?: string | null
+  }
+}
+
+export interface AudiobookDetail {
+  manifest: AudiobookManifest
+  chunks: AudiobookChunk[]
+}
+
 export interface BookManifest {
   book: string
   created_at: string
@@ -249,6 +285,19 @@ export const api = {
 
   getAudiobooks: () =>
     request<AudiobookSummary[]>(`${BASE}/audiobooks`),
+
+  getAudiobook: (slug: string) =>
+    request<AudiobookDetail>(`${BASE}/audiobooks/${slug}`),
+
+  updateAudiobookChunk: (slug: string, id: string, text: string) =>
+    request<{ id: string; char_count: number; status: string }>(
+      `${BASE}/audiobooks/${slug}/chunks/${id}`,
+      {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text }),
+      }
+    ),
 
   createAudiobookFromBook: (bookSlug: string, title?: string) =>
     request<{ slug: string; title: string; chunk_count: number }>(
