@@ -7,6 +7,7 @@ using System;
 using AudiobookPipeline.Api.Services;
 using AudiobookPipeline.TextProcessor.Core.Services;
 using AudiobookPipeline.TextProcessor.Core.Models;
+using AudiobookPipeline.Api.Jobs;
 
 namespace AudiobookPipeline.Api.Endpoints;
 
@@ -16,6 +17,7 @@ public static class AudiobookEndpoints
     {
         app.MapGet("/api/audiobooks", ListAudiobooks);
         app.MapGet("/api/audiobooks/{slug}", GetAudiobook);
+        app.MapPost("/api/audiobooks/{slug}/render", StartRender);
         app.MapPut("/api/audiobooks/{slug}/chunks/{id}", UpdateChunk);
         app.MapPost("/api/audiobooks/from-book", CreateFromBook);
         app.MapPost("/api/audiobooks/from-text", CreateFromText);
@@ -33,6 +35,26 @@ public static class AudiobookEndpoints
         var manifest = audiobooks.LoadManifest(slug);
         var chunks = audiobooks.LoadChunks(slug);
         return Results.Ok(new { manifest, chunks });
+    }
+
+    private static async Task<IResult> StartRender(
+        string slug,
+        AudiobookService audiobooks,
+        IHttpClientFactory httpFactory,
+        PathService paths,
+        AudiobookPipeline.Api.Jobs.BackgroundTaskQueue queue)
+    {
+        if (!audiobooks.Exists(slug))
+            return Results.NotFound();
+
+        var manifest = audiobooks.LoadManifest(slug);
+        if (manifest.RenderStatus == "rendering")
+            return Results.Conflict(new { message = "Render already in progress." });
+
+        var job = new AudiobookPipeline.Api.Jobs.AudiobookRenderJob(slug, audiobooks, httpFactory, paths);
+        await queue.EnqueueAsync(job);
+
+        return Results.Accepted(null, new { message = "Render started.", slug });
     }
 
     // Update a single chunk's text. Recompute char_count. If the chunk was

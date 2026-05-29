@@ -32,3 +32,4 @@ chatterbox/
 repomix.config.json
 repomix-changed-output.xml
 repomix.changed.json
+**/*.wav
