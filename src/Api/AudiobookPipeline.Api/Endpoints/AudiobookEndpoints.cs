@@ -21,6 +21,7 @@ public static class AudiobookEndpoints
         app.MapGet("/api/audiobooks/{slug}", GetAudiobook);
         app.MapPost("/api/audiobooks/{slug}/render", StartRender);
         app.MapPut("/api/audiobooks/{slug}/chunks/{id}", UpdateChunk);
+        app.MapPost("/api/audiobooks/{slug}/chunks/{id}/split", SplitChunk);
         app.MapPost("/api/audiobooks/from-book", CreateFromBook);
         app.MapPost("/api/audiobooks/from-text", CreateFromText);
     }
@@ -111,6 +112,133 @@ public static class AudiobookEndpoints
             char_count = updated.CharCount,
             status = updated.Status.ToString().ToLowerInvariant(),
         });
+    }
+
+    private static async Task<IResult> SplitChunk(
+        string slug, string id,
+        HttpRequest request,
+        AudiobookService audiobooks,
+        PathService paths)
+    {
+        if (!audiobooks.Exists(slug))
+            return Results.NotFound();
+
+        var body = await new StreamReader(request.Body).ReadToEndAsync();
+        SplitChunkBody? parsed;
+        try
+        {
+            parsed = System.Text.Json.JsonSerializer.Deserialize<SplitChunkBody>(body, JsonOpts);
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return Results.BadRequest(new { message = "Invalid payload." });
+        }
+
+        if (parsed?.Text is null)
+            return Results.BadRequest(new { message = "text required." });
+
+        var text = parsed.Text.Trim();
+        var pos = parsed.Position;
+
+        if (pos <= 0 || pos >= text.Length)
+            return Results.BadRequest(new { message = "Split position must be inside the text." });
+
+        var text1 = text[..pos].Trim();
+        var text2 = text[pos..].Trim();
+
+        if (string.IsNullOrEmpty(text1) || string.IsNullOrEmpty(text2))
+            return Results.BadRequest(new { message = "Split position must be inside the text." });
+
+        var chunks = audiobooks.LoadChunks(slug);
+        var parent = chunks.FirstOrDefault(c => c.Id == id);
+        if (parent is null)
+            return Results.NotFound(new { message = $"chunk {id} not found." });
+
+        string? audioFileToDelete = null;
+        if (!string.IsNullOrEmpty(parent.AudioPath))
+        {
+            audioFileToDelete = Path.Combine(paths.AudiobookAudioDir(slug), $"{id}.wav");
+        }
+
+        var newId = "";
+        var parentOrder = 0;
+
+        await audiobooks.UpdateChunksAsync(slug, list =>
+        {
+            var p = list.FirstOrDefault(c => c.Id == id);
+            if (p is null) return Task.CompletedTask;
+
+            parentOrder = p.Order;
+
+            // Generate new id (max+1, same section):
+            var maxIdNum = list
+                .Where(c => c.SectionId == p.SectionId)
+                .Select(c =>
+                {
+                    var lastUnderscore = c.Id.LastIndexOf('_');
+                    if (lastUnderscore >= 0 && int.TryParse(c.Id[(lastUnderscore + 1)..], out var parsedNum))
+                        return parsedNum;
+                    return -1;
+                })
+                .DefaultIfEmpty(-1)
+                .Max();
+
+            newId = $"{p.SectionId}_{(maxIdNum + 1):D5}";
+
+            // Order shift:
+            foreach (var c in list)
+            {
+                if (c.Order > parentOrder)
+                    c.Order++;
+            }
+
+            // Piece 1 (parent):
+            p.Text = text1;
+            p.CharCount = text1.Length;
+            p.Status = ChunkStatus.Pending;
+            p.AudioPath = null;
+            p.AudioDurationSec = null;
+            p.SubtitleStartMs = null;
+            p.SubtitleEndMs = null;
+            p.IsLong = false;
+            p.Retries = 0;
+
+            // Piece 2 (new):
+            var piece2 = new ChunkEntry
+            {
+                Id = newId,
+                SectionId = p.SectionId,
+                SectionTitle = p.SectionTitle,
+                Order = parentOrder + 1,
+                Text = text2,
+                CharCount = text2.Length,
+                PageStart = p.PageStart,
+                PageEnd = p.PageEnd,
+                Status = ChunkStatus.Pending,
+                IsLong = false,
+                Retries = 0
+            };
+            list.Add(piece2);
+
+            list.Sort((a, b) => a.Order.CompareTo(b.Order));
+
+            return Task.CompletedTask;
+        });
+
+        // Delete old audio:
+        if (audioFileToDelete != null && File.Exists(audioFileToDelete))
+        {
+            try
+            {
+                File.Delete(audioFileToDelete);
+            }
+            catch
+            {
+                // ignore
+            }
+        }
+
+        return Results.Ok(new { message = "Chunk split.", new_chunk_id = newId, order = parentOrder });
     }
 
     // Create an audiobook by snapshotting a book's edited content.
@@ -265,6 +393,12 @@ public static class AudiobookEndpoints
     private sealed class UpdateChunkBody
     {
         public string? Text { get; set; }
+    }
+
+    private sealed class SplitChunkBody
+    {
+        public string? Text { get; set; }
+        public int Position { get; set; }
     }
 
     private static readonly System.Text.Json.JsonSerializerOptions JsonOpts = new()

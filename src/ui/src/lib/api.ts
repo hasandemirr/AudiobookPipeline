@@ -305,6 +305,16 @@ export const api = {
       }
     ),
 
+  splitAudiobookChunk: (slug: string, id: string, text: string, position: number) =>
+    request<{ message: string; new_chunk_id: string; order: number }>(
+      `${BASE}/audiobooks/${slug}/chunks/${id}/split`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text, position }),
+      }
+    ),
+
   createAudiobookFromBook: (bookSlug: string, title?: string) =>
     request<{ slug: string; title: string; chunk_count: number }>(
       `${BASE}/audiobooks/from-book`,

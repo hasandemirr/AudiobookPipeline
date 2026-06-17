@@ -1,11 +1,11 @@
 import { useParams, useNavigate } from 'react-router-dom'
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api, type AudiobookChunk } from '../lib/api'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { ArrowLeft, Zap, Play, Loader2 } from 'lucide-react'
+import { ArrowLeft, Zap, Play, Loader2, Scissors } from 'lucide-react'
 import { Progress } from '@/components/ui/progress'
 import { toast } from 'sonner'
 import { useRenderProgress, type RenderProgress } from '../hooks/useRenderProgress'
@@ -161,6 +161,7 @@ function ChunkBox({ slug, chunk }: {
   const queryClient = useQueryClient()
   const [editing, setEditing] = useState(false)
   const [text, setText] = useState(chunk.text)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   const save = useMutation({
     mutationFn: () => api.updateAudiobookChunk(slug, chunk.id, text),
@@ -169,9 +170,30 @@ function ChunkBox({ slug, chunk }: {
     },
   })
 
+  const split = useMutation({
+    mutationFn: (position: number) =>
+      api.splitAudiobookChunk(slug, chunk.id, text, position),
+    onSuccess: () => {
+      setEditing(false)
+      queryClient.invalidateQueries({ queryKey: ['audiobook', slug] })
+    },
+    onError: (err) => {
+      toast.error(err instanceof Error ? err.message : 'Bölünemedi.')
+    },
+  })
+
   const handleBlur = () => {
     setEditing(false)
     if (text !== chunk.text) save.mutate()
+  }
+
+  const handleSplit = () => {
+    const pos = textareaRef.current?.selectionStart ?? 0
+    if (pos <= 0 || pos >= text.length) {
+      toast.error('Bölmek için metnin ortasına imleç koyun.')
+      return
+    }
+    split.mutate(pos)
   }
 
   const count = text.length
@@ -181,15 +203,27 @@ function ChunkBox({ slug, chunk }: {
     <div className="border rounded-md p-2 bg-background w-[260px]
                     text-xs space-y-1.5">
       {editing ? (
-        <textarea
-          autoFocus
-          value={text}
-          onChange={e => setText(e.target.value)}
-          onBlur={handleBlur}
-          className="w-full text-xs border rounded p-1 bg-background
-                     resize-none min-h-[80px] outline-none focus:ring-1
-                     focus:ring-primary"
-        />
+        <>
+          <textarea
+            ref={textareaRef}
+            autoFocus
+            value={text}
+            onChange={e => setText(e.target.value)}
+            onBlur={handleBlur}
+            className="w-full text-xs border rounded p-1 bg-background
+                       resize-none min-h-[80px] outline-none focus:ring-1
+                       focus:ring-primary"
+          />
+          <Button
+            size="sm" variant="outline"
+            className="h-6 text-xs"
+            onMouseDown={(e) => e.preventDefault()}   // textarea blur'unu engelle (imleç korunsun)
+            onClick={handleSplit}
+            disabled={split.isPending}
+          >
+            <Scissors size={11} className="mr-1" />İmleçten Böl
+          </Button>
+        </>
       ) : (
         <p className="whitespace-pre-wrap break-words line-clamp-4
                       cursor-text"
