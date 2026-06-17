@@ -22,6 +22,7 @@ public static class AudiobookEndpoints
         app.MapPost("/api/audiobooks/{slug}/render", StartRender);
         app.MapPut("/api/audiobooks/{slug}/chunks/{id}", UpdateChunk);
         app.MapPost("/api/audiobooks/{slug}/chunks/{id}/split", SplitChunk);
+        app.MapPost("/api/audiobooks/{slug}/chunks/{id}/merge-next", MergeNextChunk);
         app.MapPost("/api/audiobooks/from-book", CreateFromBook);
         app.MapPost("/api/audiobooks/from-text", CreateFromText);
     }
@@ -239,6 +240,101 @@ public static class AudiobookEndpoints
         }
 
         return Results.Ok(new { message = "Chunk split.", new_chunk_id = newId, order = parentOrder });
+    }
+
+    private static async Task<IResult> MergeNextChunk(
+        string slug,
+        string id,
+        AudiobookService audiobooks,
+        PathService paths,
+        Microsoft.Extensions.Options.IOptions<AudiobookPipeline.Api.Config.ChunkConfig> chunkConfig)
+    {
+        if (!audiobooks.Exists(slug))
+            return Results.NotFound();
+
+        var maxChars = chunkConfig.Value.MaxChars > 0 ? chunkConfig.Value.MaxChars : 280;
+
+        var chunks = audiobooks.LoadChunks(slug);
+        var parent = chunks.FirstOrDefault(c => c.Id == id);
+        if (parent is null)
+            return Results.NotFound(new { message = $"chunk {id} not found." });
+
+        var next = chunks.FirstOrDefault(c => c.Order == parent.Order + 1);
+        if (next == null || next.SectionId != parent.SectionId)
+            return Results.BadRequest(new { message = "No adjacent chunk in the same section to merge." });
+
+        var mergedText = (parent.Text + " " + next.Text).Trim();
+        if (mergedText.Length > maxChars)
+            return Results.BadRequest(new { message = $"Merge would exceed the {maxChars} character limit." });
+
+        var parentAudioPath = Path.Combine(paths.AudiobookAudioDir(slug), $"{parent.Id}.wav");
+        var nextAudioPath = Path.Combine(paths.AudiobookAudioDir(slug), $"{next.Id}.wav");
+
+        int? mergedStart = (parent.PageStart, next.PageStart) switch
+        {
+            (null, null) => null,
+            (var x, null) => x,
+            (null, var y) => y,
+            (var x, var y) => Math.Min(x.Value, y.Value)
+        };
+        int? mergedEnd = (parent.PageEnd, next.PageEnd) switch
+        {
+            (null, null) => null,
+            (var x, null) => x,
+            (null, var y) => y,
+            (var x, var y) => Math.Max(x.Value, y.Value)
+        };
+
+        await audiobooks.UpdateChunksAsync(slug, list =>
+        {
+            var p = list.FirstOrDefault(c => c.Id == id);
+            var n = list.FirstOrDefault(c => c.Order == parent.Order + 1);
+            if (p is null || n is null) return Task.CompletedTask;
+
+            var removedOrder = n.Order;
+
+            p.Text = mergedText;
+            p.CharCount = mergedText.Length;
+            p.Status = ChunkStatus.Pending;
+            p.AudioPath = null;
+            p.AudioDurationSec = null;
+            p.SubtitleStartMs = null;
+            p.SubtitleEndMs = null;
+            p.IsLong = false;
+            p.Retries = 0;
+            p.PageStart = mergedStart;
+            p.PageEnd = mergedEnd;
+
+            list.Remove(n);
+
+            foreach (var c in list)
+            {
+                if (c.Order > removedOrder)
+                    c.Order--;
+            }
+
+            list.Sort((a, b) => a.Order.CompareTo(b.Order));
+
+            return Task.CompletedTask;
+        });
+
+        // Delete audio files after saving
+        foreach (var path in new[] { parentAudioPath, nextAudioPath })
+        {
+            if (File.Exists(path))
+            {
+                try
+                {
+                    File.Delete(path);
+                }
+                catch
+                {
+                    // ignore
+                }
+            }
+        }
+
+        return Results.Ok(new { message = "Chunks merged.", id = parent.Id });
     }
 
     // Create an audiobook by snapshotting a book's edited content.

@@ -315,6 +315,12 @@ export const api = {
       }
     ),
 
+  mergeNextChunk: (slug: string, id: string) =>
+    request<{ message: string; id: string }>(
+      `${BASE}/audiobooks/${slug}/chunks/${id}/merge-next`,
+      { method: 'POST' }
+    ),
+
   createAudiobookFromBook: (bookSlug: string, title?: string) =>
     request<{ slug: string; title: string; chunk_count: number }>(
       `${BASE}/audiobooks/from-book`,

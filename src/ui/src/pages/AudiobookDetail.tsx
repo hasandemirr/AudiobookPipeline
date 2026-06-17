@@ -5,7 +5,7 @@ import { api, type AudiobookChunk } from '../lib/api'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { ArrowLeft, Zap, Play, Loader2, Scissors } from 'lucide-react'
+import { ArrowLeft, Zap, Play, Loader2, Scissors, Merge } from 'lucide-react'
 import { Progress } from '@/components/ui/progress'
 import { toast } from 'sonner'
 import { useRenderProgress, type RenderProgress } from '../hooks/useRenderProgress'
@@ -142,8 +142,13 @@ export default function AudiobookDetail() {
               </div>
               {/* Chunk'lar soldan saga akan grid */}
               <div className="flex flex-wrap gap-2">
-                {g.items.map(c => (
-                  <ChunkBox key={c.id} slug={slug!} chunk={c} />
+                {g.items.map((c, i) => (
+                  <ChunkBox
+                    key={c.id}
+                    slug={slug!}
+                    chunk={c}
+                    next={g.items[i + 1] ?? null}
+                  />
                 ))}
               </div>
             </CardContent>
@@ -154,9 +159,10 @@ export default function AudiobookDetail() {
   )
 }
 
-function ChunkBox({ slug, chunk }: {
+function ChunkBox({ slug, chunk, next }: {
   slug: string
   chunk: AudiobookChunk
+  next: AudiobookChunk | null
 }) {
   const queryClient = useQueryClient()
   const [editing, setEditing] = useState(false)
@@ -182,6 +188,12 @@ function ChunkBox({ slug, chunk }: {
     },
   })
 
+  const merge = useMutation({
+    mutationFn: () => api.mergeNextChunk(slug, chunk.id),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['audiobook', slug] }),
+    onError: (err) => toast.error(err instanceof Error ? err.message : 'Birleştirilemedi.'),
+  })
+
   const handleBlur = () => {
     setEditing(false)
     if (text !== chunk.text) save.mutate()
@@ -198,10 +210,12 @@ function ChunkBox({ slug, chunk }: {
 
   const count = text.length
   const over = count > 280
+  const mergedLen = next ? chunk.text.length + 1 + next.text.length : 0
+  const canMerge = !!next && mergedLen <= 280
 
   return (
     <div className="border rounded-md p-2 bg-background w-[260px]
-                    text-xs space-y-1.5">
+                    text-xs flex flex-col gap-1.5 min-h-[140px]">
       {editing ? (
         <>
           <textarea
@@ -226,12 +240,12 @@ function ChunkBox({ slug, chunk }: {
         </>
       ) : (
         <p className="whitespace-pre-wrap break-words line-clamp-4
-                      cursor-text"
+                      cursor-text flex-1"
           onClick={() => { setText(chunk.text); setEditing(true) }}>
           {chunk.text}
         </p>
       )}
-      <div className="flex items-center gap-1.5 flex-wrap text-muted-foreground">
+      <div className="flex items-center gap-1.5 flex-wrap text-muted-foreground mt-auto">
         <span className={over ? 'text-destructive font-medium' : ''}>
           {count}/280
         </span>
@@ -257,6 +271,17 @@ function ChunkBox({ slug, chunk }: {
             className="text-[9px] px-1 py-0">{chunk.status}</Badge>
         </span>
       </div>
+      {!editing && next && (
+        <Button
+          size="sm" variant="ghost"
+          className="h-6 text-xs w-full justify-start"
+          onClick={() => merge.mutate()}
+          disabled={!canMerge || merge.isPending}
+          title={mergedLen > 280 ? `Birleşince ${mergedLen} karakter (>280)` : 'Sonraki ile birleştir'}
+        >
+          <Merge size={11} className="mr-1" />Sonraki ile birleştir
+        </Button>
+      )}
     </div>
   )
 }
