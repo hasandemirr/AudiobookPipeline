@@ -289,6 +289,12 @@ export const api = {
   getAudiobook: (slug: string) =>
     request<AudiobookDetail>(`${BASE}/audiobooks/${slug}`),
 
+  startRender: (slug: string) =>
+    request<{ message: string; slug: string }>(
+      `${BASE}/audiobooks/${slug}/render`,
+      { method: 'POST' }
+    ),
+
   updateAudiobookChunk: (slug: string, id: string, text: string) =>
     request<{ id: string; char_count: number; status: string }>(
       `${BASE}/audiobooks/${slug}/chunks/${id}`,

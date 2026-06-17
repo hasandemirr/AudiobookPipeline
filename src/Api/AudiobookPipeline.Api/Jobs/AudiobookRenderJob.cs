@@ -7,6 +7,8 @@ using System.Threading;
 using System.Threading.Tasks;
 using AudiobookPipeline.Api.Services;
 using AudiobookPipeline.TextProcessor.Core.Models;
+using Microsoft.AspNetCore.SignalR;
+using AudiobookPipeline.Api.Hubs;
 
 namespace AudiobookPipeline.Api.Jobs;
 
@@ -19,22 +21,29 @@ public class AudiobookRenderJob : IJob
     private readonly AudiobookService _audiobooks;
     private readonly IHttpClientFactory _httpFactory;
     private readonly PathService _paths;
+    private readonly IHubContext<ProgressHub> _hub;
 
     public AudiobookRenderJob(
         string slug,
         AudiobookService audiobooks,
         IHttpClientFactory httpFactory,
-        PathService paths)
+        PathService paths,
+        IHubContext<ProgressHub> hub)
     {
         _slug = slug;
         _audiobooks = audiobooks;
         _httpFactory = httpFactory;
         _paths = paths;
+        _hub = hub;
     }
 
     public async Task ExecuteAsync(CancellationToken cancellationToken)
     {
         var client = _httpFactory.CreateClient("tts");
+
+        async Task Notify(string? chunkId, int index, int total, string status, bool done = false, bool error = false) =>
+            await _hub.Clients.All.SendAsync("RenderProgress",
+                new { slug = _slug, chunkId, index, total, status, done, error }, cancellationToken);
 
         await _audiobooks.UpdateManifestAsync(_slug, m =>
         {
@@ -42,6 +51,8 @@ public class AudiobookRenderJob : IJob
             m.UpdatedAt = DateTime.UtcNow.ToString("o");
             return Task.CompletedTask;
         });
+
+        await Notify(null, 0, 0, "loading");
 
         try
         {
@@ -54,6 +65,7 @@ public class AudiobookRenderJob : IJob
                     m.UpdatedAt = DateTime.UtcNow.ToString("o");
                     return Task.CompletedTask;
                 });
+                await Notify(null, 0, 0, "failed", done: true, error: true);
                 return;
             }
         }
@@ -65,6 +77,7 @@ public class AudiobookRenderJob : IJob
                 m.UpdatedAt = DateTime.UtcNow.ToString("o");
                 return Task.CompletedTask;
             });
+            await Notify(null, 0, 0, "failed", done: true, error: true);
             return;
         }
 
@@ -76,11 +89,16 @@ public class AudiobookRenderJob : IJob
             .OrderBy(c => c.Order)
             .ToList();
 
+        var total = workList.Count;
+        await Notify(null, 0, total, "rendering");
+
         var audioDir = _paths.AudiobookAudioDir(_slug);
         Directory.CreateDirectory(audioDir);
 
+        var index = 0;
         foreach (var c in workList)
         {
+            index++;
             if (cancellationToken.IsCancellationRequested)
                 break;
 
@@ -93,6 +111,7 @@ public class AudiobookRenderJob : IJob
                 }
                 return Task.CompletedTask;
             });
+            await Notify(c.Id, index, total, "rendering");
 
             try
             {
@@ -141,6 +160,7 @@ public class AudiobookRenderJob : IJob
                     }
                     return Task.CompletedTask;
                 });
+                await Notify(c.Id, index, total, "done");
             }
             catch (Exception)
             {
@@ -154,6 +174,7 @@ public class AudiobookRenderJob : IJob
                     }
                     return Task.CompletedTask;
                 });
+                await Notify(c.Id, index, total, "failed");
             }
         }
 
@@ -165,5 +186,6 @@ public class AudiobookRenderJob : IJob
             m.UpdatedAt = DateTime.UtcNow.ToString("o");
             return Task.CompletedTask;
         });
+        await Notify(null, total, total, "done", done: true, error: false);
     }
 }

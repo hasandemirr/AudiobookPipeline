@@ -5,7 +5,10 @@ import { api, type AudiobookChunk } from '../lib/api'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { ArrowLeft, Zap } from 'lucide-react'
+import { ArrowLeft, Zap, Play, Loader2 } from 'lucide-react'
+import { Progress } from '@/components/ui/progress'
+import { toast } from 'sonner'
+import { useRenderProgress, type RenderProgress } from '../hooks/useRenderProgress'
 
 const statusVariant = (s: string) => {
   if (s === 'done') return 'default' as const
@@ -17,13 +20,41 @@ const statusVariant = (s: string) => {
 export default function AudiobookDetail() {
   const { slug } = useParams<{ slug: string }>()
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
+  const [rendering, setRendering] = useState(false)
+  const [progress, setProgress] = useState<RenderProgress | null>(null)
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['audiobook', slug],
     queryFn: () => api.getAudiobook(slug!),
     enabled: !!slug,
     retry: false,
+    refetchInterval: rendering ? 1500 : false,
   })
+
+  const { connect, disconnect } = useRenderProgress({
+    onProgress: setProgress,
+    onDone: () => {
+      setRendering(false); setProgress(null)
+      queryClient.invalidateQueries({ queryKey: ['audiobook', slug] })
+    },
+    onError: () => {
+      setRendering(false); setProgress(null)
+      queryClient.invalidateQueries({ queryKey: ['audiobook', slug] })
+      toast.error('Render başarısız oldu (motor yüklenemedi).')
+    },
+  })
+
+  const startRender = async () => {
+    if (!slug) return
+    await connect(); setRendering(true); setProgress(null)
+    try {
+      await api.startRender(slug)
+    } catch (err) {
+      await disconnect(); setRendering(false)
+      toast.error(err instanceof Error ? err.message : 'Render başlatılamadı.')
+    }
+  }
 
   if (isLoading)
     return <div className="p-6 text-sm text-muted-foreground">Yükleniyor…</div>
@@ -57,17 +88,43 @@ export default function AudiobookDetail() {
   return (
     <div className="h-full flex flex-col">
       {/* Üst bar */}
-      <div className="px-4 py-2 border-b flex items-center gap-2 shrink-0">
-        <Button variant="ghost" size="icon"
-          onClick={() => navigate('/audiobooks')} title="Audiobooks">
-          <ArrowLeft size={15} />
-        </Button>
-        <span className="text-sm font-medium">{manifest.title}</span>
-        <Badge variant="outline" className="text-xs">{manifest.source_type}</Badge>
-        <Badge variant="outline" className="text-xs">{chunks.length} chunk</Badge>
-        <Badge variant="secondary" className="text-xs">
-          {manifest.render_status}
-        </Badge>
+      <div className="px-4 py-2 border-b flex flex-col shrink-0 gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <Button variant="ghost" size="icon"
+            onClick={() => navigate('/audiobooks')} title="Audiobooks">
+            <ArrowLeft size={15} />
+          </Button>
+          <span className="text-sm font-medium">{manifest.title}</span>
+          <Badge variant="outline" className="text-xs">{manifest.source_type}</Badge>
+          <Badge variant="outline" className="text-xs">{chunks.length} chunk</Badge>
+          <Badge variant="secondary" className="text-xs">
+            {manifest.render_status}
+          </Badge>
+          <Button size="sm" onClick={startRender} disabled={rendering || manifest.render_status === 'rendering'}>
+            {rendering ? (
+              <Loader2 size={13} className="mr-1 animate-spin" />
+            ) : (
+              <Play size={13} className="mr-1" />
+            )}
+            {rendering ? 'Render ediliyor…' : 'Render Başlat'}
+          </Button>
+        </div>
+        {rendering && (
+          <div className="flex items-center gap-2 px-2 pb-1">
+            {progress && progress.total > 0 ? (
+              <>
+                <Progress className="h-2 flex-1" value={(progress.index / progress.total) * 100} />
+                <span className="text-xs text-muted-foreground whitespace-nowrap">
+                  {progress.index}/{progress.total}
+                </span>
+              </>
+            ) : (
+              <span className="text-xs text-muted-foreground animate-pulse">
+                Başlatılıyor… (motor yükleniyor olabilir)
+              </span>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Section card'lar */}

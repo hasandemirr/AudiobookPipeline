@@ -69,6 +69,9 @@ builder.Services.ConfigureHttpJsonOptions(options => {
         System.Text.Json.JsonNamingPolicy.SnakeCaseLower;
     options.SerializerOptions.DefaultIgnoreCondition = 
         System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull;
+    options.SerializerOptions.Converters.Add(
+        new System.Text.Json.Serialization.JsonStringEnumConverter(
+            System.Text.Json.JsonNamingPolicy.SnakeCaseLower));
 });
 
 builder.Services.Configure<Microsoft.AspNetCore.Mvc.JsonOptions>(options => {

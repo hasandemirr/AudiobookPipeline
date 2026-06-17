@@ -8,6 +8,8 @@ using AudiobookPipeline.Api.Services;
 using AudiobookPipeline.TextProcessor.Core.Services;
 using AudiobookPipeline.TextProcessor.Core.Models;
 using AudiobookPipeline.Api.Jobs;
+using Microsoft.AspNetCore.SignalR;
+using AudiobookPipeline.Api.Hubs;
 
 namespace AudiobookPipeline.Api.Endpoints;
 
@@ -42,7 +44,8 @@ public static class AudiobookEndpoints
         AudiobookService audiobooks,
         IHttpClientFactory httpFactory,
         PathService paths,
-        AudiobookPipeline.Api.Jobs.BackgroundTaskQueue queue)
+        AudiobookPipeline.Api.Jobs.BackgroundTaskQueue queue,
+        IHubContext<ProgressHub> hub)
     {
         if (!audiobooks.Exists(slug))
             return Results.NotFound();
@@ -51,7 +54,7 @@ public static class AudiobookEndpoints
         if (manifest.RenderStatus == "rendering")
             return Results.Conflict(new { message = "Render already in progress." });
 
-        var job = new AudiobookPipeline.Api.Jobs.AudiobookRenderJob(slug, audiobooks, httpFactory, paths);
+        var job = new AudiobookPipeline.Api.Jobs.AudiobookRenderJob(slug, audiobooks, httpFactory, paths, hub);
         await queue.EnqueueAsync(job);
 
         return Results.Accepted(null, new { message = "Render started.", slug });
