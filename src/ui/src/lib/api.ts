@@ -321,6 +321,24 @@ export const api = {
       { method: 'POST' }
     ),
 
+  addChunkAfter: (slug: string, id: string) =>
+    request<{ message: string; new_chunk_id: string }>(
+      `${BASE}/audiobooks/${slug}/chunks/${id}/add-after`,
+      { method: 'POST' }
+    ),
+
+  deleteAudiobookChunk: (slug: string, id: string) =>
+    request<{ message: string; id: string }>(
+      `${BASE}/audiobooks/${slug}/chunks/${id}`,
+      { method: 'DELETE' }
+    ),
+
+  deleteAudiobook: (slug: string) =>
+    request<{ message: string; slug: string }>(
+      `${BASE}/audiobooks/${slug}`,
+      { method: 'DELETE' }
+    ),
+
   createAudiobookFromBook: (bookSlug: string, title?: string) =>
     request<{ slug: string; title: string; chunk_count: number }>(
       `${BASE}/audiobooks/from-book`,

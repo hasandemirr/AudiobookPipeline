@@ -23,6 +23,9 @@ public static class AudiobookEndpoints
         app.MapPut("/api/audiobooks/{slug}/chunks/{id}", UpdateChunk);
         app.MapPost("/api/audiobooks/{slug}/chunks/{id}/split", SplitChunk);
         app.MapPost("/api/audiobooks/{slug}/chunks/{id}/merge-next", MergeNextChunk);
+        app.MapPost("/api/audiobooks/{slug}/chunks/{id}/add-after", AddChunkAfter);
+        app.MapDelete("/api/audiobooks/{slug}/chunks/{id}", DeleteChunk);
+        app.MapDelete("/api/audiobooks/{slug}", DeleteAudiobook);
         app.MapPost("/api/audiobooks/from-book", CreateFromBook);
         app.MapPost("/api/audiobooks/from-text", CreateFromText);
     }
@@ -335,6 +338,149 @@ public static class AudiobookEndpoints
         }
 
         return Results.Ok(new { message = "Chunks merged.", id = parent.Id });
+    }
+
+    private static async Task<IResult> AddChunkAfter(
+        string slug,
+        string id,
+        AudiobookService audiobooks)
+    {
+        if (!audiobooks.Exists(slug))
+            return Results.NotFound();
+
+        var chunks = audiobooks.LoadChunks(slug);
+        var parent = chunks.FirstOrDefault(c => c.Id == id);
+        if (parent is null)
+            return Results.NotFound(new { message = $"chunk {id} not found." });
+
+        string newId = "";
+
+        await audiobooks.UpdateChunksAsync(slug, list =>
+        {
+            var p = list.FirstOrDefault(c => c.Id == id);
+            if (p is null) return Task.CompletedTask;
+
+            var parentOrder = p.Order;
+
+            // Generate max+1 ID for the same section:
+            var maxIdNum = list
+                .Where(c => c.SectionId == p.SectionId)
+                .Select(c =>
+                {
+                    var lastUnderscore = c.Id.LastIndexOf('_');
+                    if (lastUnderscore >= 0 && int.TryParse(c.Id[(lastUnderscore + 1)..], out var parsedNum))
+                        return parsedNum;
+                    return -1;
+                })
+                .DefaultIfEmpty(-1)
+                .Max();
+
+            newId = $"{p.SectionId}_{(maxIdNum + 1):D5}";
+
+            // Shift subsequent chunks' orders:
+            foreach (var c in list)
+            {
+                if (c.Order > parentOrder)
+                    c.Order++;
+            }
+
+            // Create new chunk:
+            var newChunk = new ChunkEntry
+            {
+                Id = newId,
+                SectionId = p.SectionId,
+                SectionTitle = p.SectionTitle,
+                Order = parentOrder + 1,
+                Text = "Yeni chunk...",
+                CharCount = "Yeni chunk...".Length,
+                PageStart = null,
+                PageEnd = null,
+                Status = ChunkStatus.Pending,
+                IsLong = false,
+                Retries = 0
+            };
+            list.Add(newChunk);
+
+            list.Sort((a, b) => a.Order.CompareTo(b.Order));
+
+            return Task.CompletedTask;
+        });
+
+        return Results.Ok(new { message = "Chunk added.", new_chunk_id = newId });
+    }
+
+    private static async Task<IResult> DeleteChunk(
+        string slug,
+        string id,
+        AudiobookService audiobooks,
+        PathService paths)
+    {
+        if (!audiobooks.Exists(slug))
+            return Results.NotFound();
+
+        var chunks = audiobooks.LoadChunks(slug);
+        var chunk = chunks.FirstOrDefault(c => c.Id == id);
+        if (chunk is null)
+            return Results.NotFound(new { message = $"chunk {id} not found." });
+
+        var wavPath = Path.Combine(paths.AudiobookAudioDir(slug), $"{id}.wav");
+
+        await audiobooks.UpdateChunksAsync(slug, list =>
+        {
+            var target = list.FirstOrDefault(c => c.Id == id);
+            if (target != null)
+            {
+                var removedOrder = target.Order;
+                list.Remove(target);
+                foreach (var c in list)
+                {
+                    if (c.Order > removedOrder)
+                        c.Order--;
+                }
+                list.Sort((a, b) => a.Order.CompareTo(b.Order));
+            }
+            return Task.CompletedTask;
+        });
+
+        // Delete audio file if it exists:
+        if (File.Exists(wavPath))
+        {
+            try
+            {
+                File.Delete(wavPath);
+            }
+            catch
+            {
+                // ignore
+            }
+        }
+
+        return Results.Ok(new { message = "Chunk deleted.", id });
+    }
+
+    private static IResult DeleteAudiobook(
+        string slug,
+        AudiobookService audiobooks,
+        PathService paths)
+    {
+        if (!audiobooks.Exists(slug))
+            return Results.NotFound(new { message = $"{slug} not found." });
+
+        var manifest = audiobooks.LoadManifest(slug);
+        if (manifest.RenderStatus == "rendering")
+            return Results.Conflict(new { message = "Audiobook is currently rendering." });
+
+        var dir = paths.AudiobookDir(slug);
+        try
+        {
+            if (Directory.Exists(dir))
+                Directory.Delete(dir, recursive: true);
+            return Results.Ok(new { message = "Audiobook deleted.", slug });
+        }
+        catch (Exception ex)
+        {
+            return Results.Problem(detail: ex.Message, statusCode: 500, title: "Delete failed.");
+        }
     }
 
     // Create an audiobook by snapshotting a book's edited content.

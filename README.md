@@ -114,6 +114,12 @@ workspace/{slug}/
   chunks/*.txt           ← chunk'lanmış metin
   audio/*.wav            ← chunk ses dosyaları
 
+audiobooks/{slug}/
+  audiobook.json         ← audiobook manifestosu (meta)
+  chunks.json            ← audiobook chunk'ları
+  audio/{id}.wav         ← chunk ses dosyaları
+  output/                ← (ileride) birleşik mp3/wav + srt altyazı
+
 output/{slug}/
   {slug}.wav             ← birleşik ses
   {slug}.srt             ← altyazı
@@ -169,6 +175,12 @@ Bu marker dahili formattır. Export sırasında strip edilir. Chunk
 pipeline'ında sayfa geçişleri `type: "page_marker"` chunk'ı olarak
 korunur ve SRT'de `[Sayfa N]` olarak görünür.
 
+### Python TTS /render Formatı
+
+FastAPI TTS servisi (port 5001) `/render` endpoint'i:
+- **Çıktı:** 16-bit PCM WAV formatında ham ses baytları.
+- **Süre Bilgisi:** Response header'larında, üretilen sesin milisaniye cinsinden süresini belirten `X-Audio-Duration-Ms` değeri döner.
+
 ---
 
 ## API Endpoints
@@ -188,13 +200,25 @@ PATCH  /api/books/{slug}/sections/{id}/narrate
 DELETE /api/books/{slug}/sections/{id}/reviewed    (reset to raw)
 GET    /api/books/{slug}/export
 GET    /api/books/{slug}/export/status
+
+GET    /api/audiobooks
+GET    /api/audiobooks/{slug}
+POST   /api/audiobooks/from-book
+POST   /api/audiobooks/from-text
+PUT    /api/audiobooks/{slug}/chunks/{id}
+POST   /api/audiobooks/{slug}/chunks/{id}/split
+POST   /api/audiobooks/{slug}/chunks/{id}/merge-next
+POST   /api/audiobooks/{slug}/chunks/{id}/add-after
+DELETE /api/audiobooks/{slug}/chunks/{id}
+POST   /api/audiobooks/{slug}/render
+DELETE /api/audiobooks/{slug}
 ```
 
 **SignalR Hub:** `/hubs/progress`
 - `ExtractProgress` → `{ slug, message, percent, done?, error? }`
+- `RenderProgress` → `{ slug, chunkId, index, total, status, done?, error? }`
 
-(Servis orchestration, TTS render, voice ve Ollama endpoint'leri gelecek
-fazlarda eklenecek.)
+(Servis orchestration, voice ve Ollama endpoint'leri gelecek fazlarda eklenecek.)
 
 ---
 

@@ -13,41 +13,15 @@
     "retries": 0
   },
   {
-    "id": "text_00001",
-    "section_id": "text",
-    "section_title": "ilyadaKisa",
-    "order": 1,
-    "text": "i cumle burada. Ucuncu cumle Buyru\u011Fu yerine geliyordu Zeus\u2019un,",
-    "char_count": 62,
-    "status": "done",
-    "audio_path": "audiobooks\\ilyadakisa\\audio\\text_00001.wav",
-    "audio_duration_sec": 3.92,
-    "is_long": false,
-    "retries": 0
-  },
-  {
     "id": "text_00003",
     "section_id": "text",
     "section_title": "ilyadaKisa",
-    "order": 2,
+    "order": 1,
     "text": "il k a\u00E7\u0131ld\u0131\u011F\u0131 g\u00FCnden beri aralar\u0131 erler in ba\u015Fbu\u011Fu Atreuso\u011Flu\u2019yla tanr\u0131sal Akhilleus\u2019un. k a\u00E7\u0131ld\u0131\u011F\u0131 g\u00FCnden",
     "char_count": 106,
     "status": "done",
     "audio_path": "audiobooks\\ilyadakisa\\audio\\text_00003.wav",
     "audio_duration_sec": 6.48,
-    "is_long": false,
-    "retries": 0
-  },
-  {
-    "id": "text_00002",
-    "section_id": "text",
-    "section_title": "ilyadaKisa",
-    "order": 3,
-    "text": "beri aralar\u0131 erlerin ba\u015Fbu\u011Fu Atreuso\u011Flu\u2019yla tanr\u0131sal Akhilleus\u2019un.k a\u00E7\u0131ld\u0131\u011F\u0131 g\u00FCnden beri aralar\u0131 erlerin ba\u015Fbu\u011Fu Atreuso\u011Flu\u2019yla tanr\u0131sal Akhilleus\u2019un.",
-    "char_count": 150,
-    "status": "done",
-    "audio_path": "audiobooks\\ilyadakisa\\audio\\text_00002.wav",
-    "audio_duration_sec": 8.56,
     "is_long": false,
     "retries": 0
   }

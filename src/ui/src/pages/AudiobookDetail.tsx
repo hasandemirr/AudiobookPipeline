@@ -5,10 +5,11 @@ import { api, type AudiobookChunk } from '../lib/api'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { ArrowLeft, Zap, Play, Loader2, Scissors, Merge } from 'lucide-react'
+import { ArrowLeft, Zap, Play, Loader2, Scissors, Merge, Plus, Trash2 } from 'lucide-react'
 import { Progress } from '@/components/ui/progress'
 import { toast } from 'sonner'
 import { useRenderProgress, type RenderProgress } from '../hooks/useRenderProgress'
+import { ConfirmDialog } from '../components/ConfirmDialog'
 
 const statusVariant = (s: string) => {
   if (s === 'done') return 'default' as const
@@ -194,6 +195,20 @@ function ChunkBox({ slug, chunk, next }: {
     onError: (err) => toast.error(err instanceof Error ? err.message : 'Birleştirilemedi.'),
   })
 
+  const addAfter = useMutation({
+    mutationFn: () => api.addChunkAfter(slug, chunk.id),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['audiobook', slug] }),
+    onError: (err) => toast.error(err instanceof Error ? err.message : 'Eklenemedi.'),
+  })
+
+  const del = useMutation({
+    mutationFn: () => api.deleteAudiobookChunk(slug, chunk.id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['audiobook', slug] })
+    },
+    onError: (err) => toast.error(err instanceof Error ? err.message : 'Silinemedi.'),
+  })
+
   const handleBlur = () => {
     setEditing(false)
     if (text !== chunk.text) save.mutate()
@@ -281,6 +296,33 @@ function ChunkBox({ slug, chunk, next }: {
         >
           <Merge size={11} className="mr-1" />Sonraki ile birleştir
         </Button>
+      )}
+      {!editing && (
+        <div className="flex items-center gap-1">
+          <Button size="sm" variant="ghost" className="h-6 text-xs"
+            onClick={() => addAfter.mutate()} disabled={addAfter.isPending}>
+            <Plus size={11} className="mr-1" />Ekle
+          </Button>
+          <ConfirmDialog
+            title="Chunk silinsin mi?"
+            description="Bu chunk'ın metni ve seslendirilmiş içeriği kalıcı olarak silinecektir. Devam etmek istiyor musunuz?"
+            confirmLabel="Sil"
+            cancelLabel="Vazgeç"
+            variant="destructive"
+            onConfirm={() => del.mutate()}
+          >
+            {(open) => (
+              <Button
+                size="sm" variant="ghost"
+                className="h-6 text-xs text-destructive hover:text-destructive"
+                onClick={open}
+                disabled={del.isPending}
+              >
+                <Trash2 size={11} className="mr-1" />Sil
+              </Button>
+            )}
+          </ConfirmDialog>
+        </div>
       )}
     </div>
   )

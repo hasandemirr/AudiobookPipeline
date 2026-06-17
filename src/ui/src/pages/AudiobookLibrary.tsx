@@ -5,8 +5,9 @@ import { api, type AudiobookSummary, type BookSummary } from '../lib/api'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Headphones, BookText, Upload, FileText } from 'lucide-react'
+import { Headphones, BookText, Upload, FileText, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
+import { ConfirmDialog } from '../components/ConfirmDialog'
 
 export default function AudiobookLibrary() {
   const navigate = useNavigate()
@@ -51,6 +52,15 @@ export default function AudiobookLibrary() {
     onError: (err) => {
       toast.error(err instanceof Error ? err.message : 'Oluşturulamadı.')
     },
+  })
+
+  const removeAudiobook = useMutation({
+    mutationFn: (slug: string) => api.deleteAudiobook(slug),
+    onSuccess: (res) => {
+      toast.success(`"${res.slug}" silindi.`)
+      queryClient.invalidateQueries({ queryKey: ['audiobooks'] })
+    },
+    onError: (err) => toast.error(err instanceof Error ? err.message : 'Silinemedi.'),
   })
 
   const handleFile = (file: File | undefined) => {
@@ -155,6 +165,27 @@ export default function AudiobookLibrary() {
                   <Badge variant="secondary" className="text-[10px]">
                     {a.render_status}
                   </Badge>
+                </div>
+                <div className="flex justify-end pt-1">
+                  <ConfirmDialog
+                    title="Audiobook silinsin mi?"
+                    description={`"${a.title}" projesi ve tüm seslendirilmiş içeriği kalıcı olarak silinecektir. Bu işlem geri alınamaz.`}
+                    confirmLabel="Sil"
+                    cancelLabel="Vazgeç"
+                    variant="destructive"
+                    onConfirm={() => removeAudiobook.mutate(a.slug)}
+                  >
+                    {(open) => (
+                      <Button
+                        size="sm" variant="ghost"
+                        className="h-6 text-xs text-destructive hover:text-destructive"
+                        onClick={(e) => { e.stopPropagation(); open() }}
+                        disabled={removeAudiobook.isPending}
+                      >
+                        <Trash2 size={11} className="mr-1" />Sil
+                      </Button>
+                    )}
+                  </ConfirmDialog>
                 </div>
               </CardContent>
             </Card>
